@@ -55,21 +55,59 @@ public class PlexPlugin : IMediaTarget
 
     public async Task<string?> FindMediaAsync(MediaItem mediaItem, string configurationJson, CancellationToken cancellationToken = default)
     {
-        var client = CreateClient(configurationJson);
-        return mediaItem.Type switch
+        try
         {
-            MediaType.Movie => await client.SearchMovieAsync(mediaItem.Title, mediaItem.Year ?? 0, cancellationToken),
-            MediaType.Series => await client.SearchSeriesAsync(mediaItem.Title, mediaItem.Year ?? 0, cancellationToken),
-            _ => null
-        };
+            var client = CreateClient(configurationJson);
+            return mediaItem.Type switch
+            {
+                MediaType.Movie => await client.SearchMovieAsync(mediaItem.Title, mediaItem.Year ?? 0, cancellationToken),
+                MediaType.Series => await client.SearchSeriesAsync(mediaItem.Title, mediaItem.Year ?? 0, cancellationToken),
+                _ => null
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to find media '{Title}' in Plex.", mediaItem.Title);
+            return null;
+        }
     }
 
     public async Task<IReadOnlyList<string>> GetLabelsAsync(string targetItemId, string configurationJson, CancellationToken cancellationToken = default)
-        => await CreateClient(configurationJson).GetLabelsAsync(targetItemId, cancellationToken);
+    {
+        try
+        {
+            return await CreateClient(configurationJson).GetLabelsAsync(targetItemId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get labels for Plex item {ItemId}.", targetItemId);
+            return Array.Empty<string>();
+        }
+    }
 
     public async Task<bool> SetLabelsAsync(string targetItemId, IReadOnlyList<string> labels, string configurationJson, CancellationToken cancellationToken = default)
-        => await CreateClient(configurationJson).SetLabelsAsync(targetItemId, labels, cancellationToken);
+    {
+        try
+        {
+            return await CreateClient(configurationJson).SetLabelsAsync(targetItemId, labels, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set labels for Plex item {ItemId}.", targetItemId);
+            return false;
+        }
+    }
 
     public async Task<bool> AddToCollectionAsync(string targetItemId, string collectionName, string configurationJson, CancellationToken cancellationToken = default)
-        => await CreateClient(configurationJson).AddToCollectionAsync(targetItemId, collectionName, cancellationToken);
+    {
+        try
+        {
+            return await CreateClient(configurationJson).AddToCollectionAsync(targetItemId, collectionName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to add Plex item {ItemId} to collection '{Collection}'.", targetItemId, collectionName);
+            return false;
+        }
+    }
 }
