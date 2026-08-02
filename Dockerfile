@@ -3,6 +3,12 @@ WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system --gid 1000 appgroup \
+    && adduser --system --uid 1000 --ingroup appgroup --no-create-home appuser
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["src/BridgeArr.Web/BridgeArr.Web.csproj", "src/BridgeArr.Web/"]
@@ -25,4 +31,11 @@ RUN dotnet publish "BridgeArr.Web.csproj" -c Release -o /app/publish /p:UseAppHo
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p /app/logs /app/dataprotection \
+    && chown -R appuser:appgroup /app
+USER appuser
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
 ENTRYPOINT ["dotnet", "BridgeArr.Web.dll"]
