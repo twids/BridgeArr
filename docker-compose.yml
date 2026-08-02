@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bridgearr:
     build:
@@ -10,7 +8,25 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: Host=postgres;Database=bridgearr;Username=bridgearr;******
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Serilog__MinimumLevel__Default: Information
+      Serilog__MinimumLevel__Override__Microsoft: Warning
+      Serilog__MinimumLevel__Override__System: Warning
+      PLEX_URL: ${PLEX_URL:-}
+      PLEX_TOKEN: ${PLEX_TOKEN:-}
+      RADARR_URL: ${RADARR_URL:-}
+      RADARR_APIKEY: ${RADARR_APIKEY:-}
+      SONARR_URL: ${SONARR_URL:-}
+      SONARR_APIKEY: ${SONARR_APIKEY:-}
+    volumes:
+      - bridgearr_logs:/app/logs
+      - bridgearr_keys:/app/dataprotection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
@@ -19,15 +35,13 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: bridgearr
-      POSTGRES_USER: bridgearr
-      POSTGRES_PASSWORD: bridgearr
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bridgearr"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,3 +49,5 @@ services:
 
 volumes:
   postgres_data:
+  bridgearr_logs:
+  bridgearr_keys:
