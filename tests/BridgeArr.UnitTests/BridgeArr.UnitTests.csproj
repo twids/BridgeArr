@@ -20,5 +20,6 @@
     <ProjectReference Include="..\..\src\BridgeArr.Domain\BridgeArr.Domain.csproj" />
     <ProjectReference Include="..\..\src\BridgeArr.Plugins.Abstractions\BridgeArr.Plugins.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\BridgeArr.Plugins.Radarr\BridgeArr.Plugins.Radarr.csproj" />
+    <ProjectReference Include="..\..\src\BridgeArr.Plugins.Sonarr\BridgeArr.Plugins.Sonarr.csproj" />
   </ItemGroup>
 </Project>
