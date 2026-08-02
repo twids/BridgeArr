@@ -1,45 +1,209 @@
 @page "/settings"
+@attribute [Authorize(Policy = "Admin")]
 @inject BridgeArr.Application.Interfaces.IApplicationSettingRepository ApplicationSettingRepository
 
-<PageTitle>Settings</PageTitle>
+<PageTitle>Settings – BridgeArr</PageTitle>
 
 <h1>Settings</h1>
 
-<section class="content-card">
-    <h2>Application settings</h2>
-    @if (settings.Count == 0)
-    {
-        <p>No application settings have been stored yet.</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Key</th>
-                    <th>Value</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var setting in settings)
-                {
-                    <tr>
-                        <td>@setting.Key</td>
-                        <td>@setting.Value</td>
-                        <td>@(setting.Description ?? "-")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-</section>
+<AlertBanner Message="@alertMessage" IsError="@alertIsError" OnDismiss="@(() => alertMessage = null)" />
+
+<LoadingSpinner IsLoading="@isLoading" Text="Loading settings…">
+    <div class="card-grid">
+        <section class="content-card">
+            <div class="section-header">
+                <h2>Application settings</h2>
+                <button class="btn btn-primary btn-sm" @onclick="OpenAddForm">+ Add setting</button>
+            </div>
+
+            @if (settings.Count == 0)
+            {
+                <p class="muted">No application settings have been stored yet.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th>Description</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var setting in settings)
+                        {
+                            <tr>
+                                <td><code>@setting.Key</code></td>
+                                <td>
+                                    @if (IsSecret(setting.Key))
+                                    {
+                                        <span class="muted">••••••••</span>
+                                    }
+                                    else
+                                    {
+                                        @setting.Value
+                                    }
+                                </td>
+                                <td>@(setting.Description ?? "—")</td>
+                                <td>@setting.UpdatedAt.ToLocalTime().ToString("g")</td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => OpenEditForm(setting)">Edit</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+</LoadingSpinner>
+
+@* Add / Edit setting form *@
+@if (showForm)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="setting-form-title">
+        <div class="modal">
+            <h2 id="setting-form-title">@(isEditing ? "Edit setting" : "Add setting")</h2>
+
+            <EditForm Model="formModel" OnValidSubmit="SaveSetting" FormName="SettingForm">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>Key <span class="required">*</span></label>
+                    <InputText class="form-control"
+                               @bind-Value="formModel.Key"
+                               placeholder="app.feature.enabled"
+                               disabled="@isEditing" />
+                    <ValidationMessage For="() => formModel.Key" />
+                </div>
+
+                <div class="form-group">
+                    <label>Value <span class="required">*</span></label>
+                    @if (IsSecret(formModel.Key))
+                    {
+                        <InputText type="password" class="form-control" @bind-Value="formModel.Value"
+                                   autocomplete="new-password" />
+                    }
+                    else
+                    {
+                        <InputText class="form-control" @bind-Value="formModel.Value" />
+                    }
+                    <ValidationMessage For="() => formModel.Value" />
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <InputText class="form-control" @bind-Value="formModel.Description"
+                               placeholder="Optional human-readable description" />
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-primary" type="submit" disabled="@isBusy">
+                        @(isBusy ? "Saving…" : "Save")
+                    </button>
+                    <button class="btn btn-secondary" type="button" @onclick="CloseForm">Cancel</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
 
 @code {
+    private bool isLoading = true;
+    private bool isBusy;
+    private bool showForm;
+    private bool isEditing;
+    private string? alertMessage;
+    private bool alertIsError;
+
     private IReadOnlyList<ApplicationSetting> settings = Array.Empty<ApplicationSetting>();
+    private SettingFormModel formModel = new();
 
     protected override async Task OnInitializedAsync()
     {
-        settings = await ApplicationSettingRepository.GetAllAsync();
+        try
+        {
+            settings = await ApplicationSettingRepository.GetAllAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenAddForm()
+    {
+        formModel = new SettingFormModel();
+        isEditing = false;
+        showForm = true;
+    }
+
+    private void OpenEditForm(ApplicationSetting setting)
+    {
+        formModel = new SettingFormModel
+        {
+            Key = setting.Key,
+            Value = setting.Value,
+            Description = setting.Description
+        };
+        isEditing = true;
+        showForm = true;
+    }
+
+    private void CloseForm() => showForm = false;
+
+    private async Task SaveSetting()
+    {
+        isBusy = true;
+        try
+        {
+            var entity = new ApplicationSetting
+            {
+                Key = formModel.Key,
+                Value = formModel.Value,
+                Description = string.IsNullOrWhiteSpace(formModel.Description) ? null : formModel.Description,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            await ApplicationSettingRepository.UpsertAsync(entity);
+            settings = await ApplicationSettingRepository.GetAllAsync();
+            ShowSuccess("Setting saved.");
+            showForm = false;
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to save setting: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    /// <summary>Hides the value in the UI for keys that typically contain secrets.</summary>
+    private static bool IsSecret(string key)
+    {
+        var lower = key.ToLowerInvariant();
+        return lower.Contains("secret") || lower.Contains("apikey") || lower.Contains("password")
+            || lower.Contains("token") || lower.Contains("key");
+    }
+
+    private void ShowSuccess(string message) { alertMessage = message; alertIsError = false; }
+    private void ShowError(string message) { alertMessage = message; alertIsError = true; }
+
+    private sealed class SettingFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Key is required.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string Key { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Value is required.")]
+        public string Value { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
     }
 }

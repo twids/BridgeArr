@@ -11,6 +11,9 @@ namespace BridgeArr.Infrastructure.Seed;
 /// </summary>
 public static class DatabaseSeeder
 {
+    /// <summary>The built-in admin role name used for authorization policies.</summary>
+    public const string AdminRole = "Admin";
+
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
@@ -21,7 +24,10 @@ public static class DatabaseSeeder
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             await db.Database.MigrateAsync();
 
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            await SeedRolesAsync(roleManager, logger);
             await SeedAdminUserAsync(userManager, logger);
         }
         catch (Exception ex)
@@ -31,13 +37,38 @@ public static class DatabaseSeeder
         }
     }
 
+    private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager, ILogger logger)
+    {
+        if (!await roleManager.RoleExistsAsync(AdminRole))
+        {
+            var result = await roleManager.CreateAsync(new IdentityRole(AdminRole));
+            if (result.Succeeded)
+            {
+                logger.LogInformation("Created role {Role}", AdminRole);
+            }
+            else
+            {
+                logger.LogError(
+                    "Failed to create role {Role}: {Errors}",
+                    AdminRole,
+                    string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+        }
+    }
+
     private static async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager, ILogger logger)
     {
         const string adminEmail = "admin@bridgearr.local";
         const string adminUsername = "admin";
 
-        if (await userManager.FindByNameAsync(adminUsername) is not null)
+        var existing = await userManager.FindByNameAsync(adminUsername);
+        if (existing is not null)
         {
+            // Ensure existing admin is in the Admin role
+            if (!await userManager.IsInRoleAsync(existing, AdminRole))
+            {
+                await userManager.AddToRoleAsync(existing, AdminRole);
+            }
             return;
         }
 
@@ -58,6 +89,8 @@ public static class DatabaseSeeder
                 string.Join(", ", result.Errors.Select(e => e.Description)));
             return;
         }
+
+        await userManager.AddToRoleAsync(admin, AdminRole);
 
         logger.LogInformation(
             "Admin user created. Username: {Username}, Password: admin (change on first login)",

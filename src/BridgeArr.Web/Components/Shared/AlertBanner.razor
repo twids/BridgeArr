@@ -1,0 +1,21 @@
+@* Displays a dismissible success or error alert banner. *@
+
+@if (Message is not null)
+{
+    <div class="alert alert-@(IsError ? "danger" : "success")" role="alert">
+        <span>@Message</span>
+        <button class="alert-dismiss" type="button" @onclick="Dismiss" aria-label="Dismiss">✕</button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public bool IsError { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private async Task Dismiss()
+    {
+        Message = null;
+        await OnDismiss.InvokeAsync();
+    }
+}
