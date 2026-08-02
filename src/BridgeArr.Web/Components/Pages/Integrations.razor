@@ -1,0 +1,64 @@
+@page "/integrations"
+@inject BridgeArr.Application.Services.IntegrationService IntegrationService
+
+<PageTitle>Integrations</PageTitle>
+
+<h1>Integrations</h1>
+
+<div class="card-grid">
+    <section class="content-card">
+        <h2>Configured integrations</h2>
+        @if (integrations.Count == 0)
+        {
+            <p>No integrations configured.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Plugin</th>
+                        <th>Enabled</th>
+                        <th>Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var integration in integrations)
+                    {
+                        <tr>
+                            <td>@integration.Name</td>
+                            <td>@integration.PluginType</td>
+                            <td>@(integration.Enabled ? "Yes" : "No")</td>
+                            <td>@integration.UpdatedAt.ToLocalTime().ToString("u")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="content-card">
+        <h2>Available plugins</h2>
+        <ul class="list-reset">
+            @foreach (var plugin in plugins)
+            {
+                <li>
+                    <strong>@plugin.DisplayName</strong>
+                    <span class="muted">(@plugin.PluginType, @plugin.Version)</span>
+                </li>
+            }
+        </ul>
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<Integration> integrations = Array.Empty<Integration>();
+    private IReadOnlyList<BridgeArr.Plugins.Abstractions.IPlugin> plugins = Array.Empty<BridgeArr.Plugins.Abstractions.IPlugin>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        integrations = await IntegrationService.GetAllAsync();
+        plugins = IntegrationService.GetAvailablePlugins().ToList();
+    }
+}

@@ -1,0 +1,121 @@
+:root {
+    color-scheme: dark;
+    --background: #0f172a;
+    --surface: #111827;
+    --surface-alt: #1f2937;
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --border: #334155;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: Inter, Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+}
+
+a { color: var(--accent); text-decoration: none; }
+code { color: #bfdbfe; }
+
+.layout-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+}
+
+.sidebar {
+    padding: 2rem 1.25rem;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.brand {
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.tagline, .muted {
+    color: var(--muted);
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.nav-links .active {
+    font-weight: 700;
+}
+
+.main-panel {
+    padding: 2rem;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.content-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+}
+
+.stats-grid dt {
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+}
+
+.stats-grid dd {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+.list-reset {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+    .layout-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+}

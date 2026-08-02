@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BridgeArr.Api\BridgeArr.Api.csproj" />
+    <ProjectReference Include="..\BridgeArr.Application\BridgeArr.Application.csproj" />
+    <ProjectReference Include="..\BridgeArr.Infrastructure\BridgeArr.Infrastructure.csproj" />
+    <ProjectReference Include="..\BridgeArr.Plugins.Radarr\BridgeArr.Plugins.Radarr.csproj" />
+    <ProjectReference Include="..\BridgeArr.Plugins.Sonarr\BridgeArr.Plugins.Sonarr.csproj" />
+    <ProjectReference Include="..\BridgeArr.Plugins.Plex\BridgeArr.Plugins.Plex.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
+  </ItemGroup>
+</Project>
