@@ -1,0 +1,43 @@
+@page "/logs"
+@inject BridgeArr.Application.Interfaces.IWebhookEventRepository WebhookEventRepository
+
+<PageTitle>Logs</PageTitle>
+
+<h1>Operational logs</h1>
+
+<div class="card-grid">
+    <section class="content-card">
+        <h2>Runtime logging</h2>
+        <p>Structured logs are written to the console and rolling files under <code>logs/</code>.</p>
+        <p>OpenTelemetry ASP.NET Core tracing is enabled for request instrumentation.</p>
+    </section>
+
+    <section class="content-card">
+        <h2>Pending webhook events</h2>
+        @if (events.Count == 0)
+        {
+            <p>No pending webhook events.</p>
+        }
+        else
+        {
+            <ul class="list-reset">
+                @foreach (var webhookEvent in events)
+                {
+                    <li>
+                        <strong>@webhookEvent.Source</strong>
+                        <span class="muted">@webhookEvent.EventType</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<WebhookEvent> events = Array.Empty<WebhookEvent>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        events = await WebhookEventRepository.GetUnprocessedAsync();
+    }
+}

@@ -1,0 +1,45 @@
+@page "/settings"
+@inject BridgeArr.Application.Interfaces.IApplicationSettingRepository ApplicationSettingRepository
+
+<PageTitle>Settings</PageTitle>
+
+<h1>Settings</h1>
+
+<section class="content-card">
+    <h2>Application settings</h2>
+    @if (settings.Count == 0)
+    {
+        <p>No application settings have been stored yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var setting in settings)
+                {
+                    <tr>
+                        <td>@setting.Key</td>
+                        <td>@setting.Value</td>
+                        <td>@(setting.Description ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<ApplicationSetting> settings = Array.Empty<ApplicationSetting>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await ApplicationSettingRepository.GetAllAsync();
+    }
+}

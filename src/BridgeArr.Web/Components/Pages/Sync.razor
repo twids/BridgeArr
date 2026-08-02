@@ -1,0 +1,49 @@
+@page "/sync"
+@inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
+
+<PageTitle>Sync</PageTitle>
+
+<h1>Synchronization</h1>
+
+<section class="content-card">
+    <h2>Recent jobs</h2>
+    @if (jobs.Count == 0)
+    {
+        <p>No synchronization jobs have been recorded.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Source</th>
+                    <th>Target</th>
+                    <th>Created</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var job in jobs)
+                {
+                    <tr>
+                        <td>@job.Status</td>
+                        <td>@job.SourceIntegration?.Name</td>
+                        <td>@job.TargetIntegration?.Name</td>
+                        <td>@job.CreatedAt.ToLocalTime().ToString("u")</td>
+                        <td>@(job.ErrorMessage ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<SyncJob> jobs = Array.Empty<SyncJob>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        jobs = await SyncJobRepository.GetRecentAsync(25);
+    }
+}

@@ -1,0 +1,62 @@
+@page "/"
+@inject BridgeArr.Application.Interfaces.IIntegrationRepository IntegrationRepository
+@inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Dashboard</h1>
+
+<div class="card-grid">
+    <section class="content-card">
+        <h2>Overview</h2>
+        <dl class="stats-grid">
+            <div>
+                <dt>Configured integrations</dt>
+                <dd>@integrations.Count</dd>
+            </div>
+            <div>
+                <dt>Recent sync jobs</dt>
+                <dd>@recentJobs.Count</dd>
+            </div>
+            <div>
+                <dt>Failed jobs</dt>
+                <dd>@recentJobs.Count(job => job.Status == SyncJobStatus.Failed)</dd>
+            </div>
+            <div>
+                <dt>Queued jobs</dt>
+                <dd>@recentJobs.Count(job => job.Status == SyncJobStatus.Queued)</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="content-card">
+        <h2>Current integrations</h2>
+        @if (integrations.Count == 0)
+        {
+            <p>No integrations have been configured yet.</p>
+        }
+        else
+        {
+            <ul class="list-reset">
+                @foreach (var integration in integrations)
+                {
+                    <li>
+                        <strong>@integration.Name</strong>
+                        <span class="muted">(@integration.PluginType)</span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<Integration> integrations = Array.Empty<Integration>();
+    private IReadOnlyList<SyncJob> recentJobs = Array.Empty<SyncJob>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        integrations = await IntegrationRepository.GetAllAsync();
+        recentJobs = await SyncJobRepository.GetRecentAsync(10);
+    }
+}
