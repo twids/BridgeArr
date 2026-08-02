@@ -1,0 +1,11 @@
+@* Redirects unauthenticated users to the login page, preserving the return URL. *@
+
+@inject NavigationManager NavigationManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+        NavigationManager.NavigateTo($"/account/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

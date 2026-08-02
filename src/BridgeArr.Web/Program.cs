@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
+using static BridgeArr.Infrastructure.Seed.DatabaseSeeder;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
@@ -53,10 +54,13 @@ try
 
     builder.Services.ConfigureApplicationCookie(options =>
     {
-        options.LoginPath = "/Account/Login";
-        options.LogoutPath = "/Account/Logout";
-        options.AccessDeniedPath = "/Account/AccessDenied";
+        options.LoginPath = "/account/login";
+        options.LogoutPath = "/account/logout";
+        options.AccessDeniedPath = "/account/access-denied";
     });
+
+    builder.Services.AddAuthorizationBuilder()
+        .AddPolicy(AdminRole, policy => policy.RequireRole(AdminRole));
 
     builder.Services.AddOpenApi();
     builder.Services.AddSwaggerGen(options =>

@@ -1,0 +1,27 @@
+@* Modal confirmation dialog for destructive actions. *@
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div class="modal">
+            <h2 id="confirm-title">@Title</h2>
+            <p>@Message</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" @onclick="Confirm">@ConfirmLabel</button>
+                <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm";
+    [Parameter] public string Message { get; set; } = "Are you sure?";
+    [Parameter] public string ConfirmLabel { get; set; } = "Confirm";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Task Confirm() => OnConfirm.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
+}

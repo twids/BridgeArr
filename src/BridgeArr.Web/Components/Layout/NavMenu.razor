@@ -11,4 +11,13 @@
         <NavLink href="/logs">Logs</NavLink>
         <NavLink href="/settings">Settings</NavLink>
     </div>
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="nav-footer">
+                <span class="muted nav-username">@context.User.Identity?.Name</span>
+                <a href="/account/logout" class="btn btn-secondary btn-sm">Sign out</a>
+            </div>
+        </Authorized>
+    </AuthorizeView>
 </nav>

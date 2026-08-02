@@ -1,6 +1,28 @@
 <Router AppAssembly="@typeof(Program).Assembly" AdditionalAssemblies="@AdditionalAssemblies">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (!context.User.Identity!.IsAuthenticated)
+                {
+                    <RedirectToLogin />
+                }
+                else
+                {
+                    <LayoutView Layout="@typeof(Layout.MainLayout)">
+                        <article class="content-card">
+                            <h1>Access denied</h1>
+                            <p>You do not have permission to view this page.</p>
+                            <a href="/account/access-denied">Learn more</a>
+                        </article>
+                    </LayoutView>
+                }
+            </NotAuthorized>
+            <Authorizing>
+                <LayoutView Layout="@typeof(Layout.MainLayout)">
+                    <p>Checking authorization…</p>
+                </LayoutView>
+            </Authorizing>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
     <NotFound>

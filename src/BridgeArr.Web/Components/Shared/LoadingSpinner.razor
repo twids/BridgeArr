@@ -1,0 +1,19 @@
+@* Displays a loading indicator while data is being fetched. *@
+
+@if (IsLoading)
+{
+    <div class="loading-spinner" role="status" aria-live="polite">
+        <span class="spinner"></span>
+        <span>@(Text ?? "Loading…")</span>
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,64 +1,373 @@
 @page "/integrations"
+@attribute [Authorize(Policy = "Admin")]
 @inject BridgeArr.Application.Services.IntegrationService IntegrationService
 
-<PageTitle>Integrations</PageTitle>
+<PageTitle>Integrations – BridgeArr</PageTitle>
 
 <h1>Integrations</h1>
 
-<div class="card-grid">
-    <section class="content-card">
-        <h2>Configured integrations</h2>
-        @if (integrations.Count == 0)
-        {
-            <p>No integrations configured.</p>
-        }
-        else
-        {
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Plugin</th>
-                        <th>Enabled</th>
-                        <th>Updated</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var integration in integrations)
-                    {
-                        <tr>
-                            <td>@integration.Name</td>
-                            <td>@integration.PluginType</td>
-                            <td>@(integration.Enabled ? "Yes" : "No")</td>
-                            <td>@integration.UpdatedAt.ToLocalTime().ToString("u")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-    </section>
+<AlertBanner Message="@alertMessage" IsError="@alertIsError" OnDismiss="@(() => alertMessage = null)" />
 
-    <section class="content-card">
-        <h2>Available plugins</h2>
-        <ul class="list-reset">
-            @foreach (var plugin in plugins)
+<LoadingSpinner IsLoading="@isLoading" Text="Loading integrations…">
+    <div class="card-grid">
+        <section class="content-card">
+            <div class="section-header">
+                <h2>Configured integrations</h2>
+                <button class="btn btn-primary btn-sm" @onclick="OpenAddForm">+ Add integration</button>
+            </div>
+            @if (integrations.Count == 0)
             {
-                <li>
-                    <strong>@plugin.DisplayName</strong>
-                    <span class="muted">(@plugin.PluginType, @plugin.Version)</span>
-                </li>
+                <p class="muted">No integrations configured.</p>
             }
-        </ul>
-    </section>
-</div>
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Plugin</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var integration in integrations)
+                        {
+                            <tr>
+                                <td>@integration.Name</td>
+                                <td>@integration.PluginType</td>
+                                <td><StatusBadge Status="@(integration.Enabled ? "Enabled" : "Disabled")" /></td>
+                                <td>@integration.UpdatedAt.ToLocalTime().ToString("u")</td>
+                                <td class="action-cell">
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => OpenEditForm(integration)">Edit</button>
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => ToggleEnabled(integration)"
+                                            disabled="@isBusy">
+                                        @(integration.Enabled ? "Disable" : "Enable")
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => TestConnection(integration.Id)"
+                                            disabled="@isBusy">Test</button>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => ConfirmDelete(integration)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="content-card">
+            <h2>Available plugins</h2>
+            @if (plugins.Count == 0)
+            {
+                <p class="muted">No plugins registered.</p>
+            }
+            else
+            {
+                <ul class="list-reset">
+                    @foreach (var plugin in plugins)
+                    {
+                        <li class="list-item-row">
+                            <div>
+                                <strong>@plugin.DisplayName</strong>
+                                <span class="muted"> v@plugin.Version</span>
+                            </div>
+                            <span class="badge badge-queued">@plugin.PluginType</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+</LoadingSpinner>
+
+@* Add / Edit form panel *@
+@if (showForm)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="form-title">
+        <div class="modal modal-wide">
+            <h2 id="form-title">@(isEditing ? "Edit integration" : "Add integration")</h2>
+
+            <EditForm Model="formModel" OnValidSubmit="SaveIntegration" FormName="IntegrationForm">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label>Name <span class="required">*</span></label>
+                    <InputText class="form-control" @bind-Value="formModel.Name" placeholder="My Radarr instance" />
+                    <ValidationMessage For="() => formModel.Name" />
+                </div>
+
+                <div class="form-group">
+                    <label>Plugin type <span class="required">*</span></label>
+                    <InputSelect class="form-control" @bind-Value="formModel.PluginType"
+                                 @bind-Value:after="OnPluginTypeChanged">
+                        <option value="">— select a plugin —</option>
+                        @foreach (var plugin in plugins)
+                        {
+                            <option value="@plugin.PluginType">@plugin.DisplayName</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => formModel.PluginType" />
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <InputCheckbox @bind-Value="formModel.Enabled" /> Enabled
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Configuration JSON
+                        <span class="muted">(plugin-specific settings)</span>
+                    </label>
+                    <textarea class="form-control form-textarea"
+                              @bind="formModel.ConfigurationJson"
+                              rows="8"
+                              placeholder='{"url":"http://localhost:7878","apiKey":"your-api-key"}'
+                              spellcheck="false"></textarea>
+                    @if (jsonError is not null)
+                    {
+                        <span class="validation-message">@jsonError</span>
+                    }
+                    <small class="muted">Enter valid JSON with the settings required by the selected plugin.</small>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-primary" type="submit" disabled="@isBusy">
+                        @(isBusy ? "Saving…" : (isEditing ? "Save changes" : "Add integration"))
+                    </button>
+                    <button class="btn btn-secondary" type="button" @onclick="CloseForm">Cancel</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<ConfirmDialog IsVisible="@showDeleteConfirm"
+               Title="Delete integration"
+               Message="@deleteConfirmMessage"
+               ConfirmLabel="Delete"
+               OnConfirm="ExecuteDelete"
+               OnCancel="@(() => showDeleteConfirm = false)" />
 
 @code {
+    private bool isLoading = true;
+    private bool isBusy;
+    private bool showForm;
+    private bool isEditing;
+    private bool showDeleteConfirm;
+    private string? alertMessage;
+    private bool alertIsError;
+    private string? jsonError;
+    private string deleteConfirmMessage = string.Empty;
+    private Guid deleteTargetId;
+
     private IReadOnlyList<Integration> integrations = Array.Empty<Integration>();
     private IReadOnlyList<BridgeArr.Plugins.Abstractions.IPlugin> plugins = Array.Empty<BridgeArr.Plugins.Abstractions.IPlugin>();
 
+    private IntegrationFormModel formModel = new();
+
     protected override async Task OnInitializedAsync()
     {
-        integrations = await IntegrationService.GetAllAsync();
-        plugins = IntegrationService.GetAvailablePlugins().ToList();
+        try
+        {
+            integrations = await IntegrationService.GetAllAsync();
+            plugins = IntegrationService.GetAvailablePlugins().ToList();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenAddForm()
+    {
+        formModel = new IntegrationFormModel();
+        isEditing = false;
+        jsonError = null;
+        showForm = true;
+    }
+
+    private void OpenEditForm(Integration integration)
+    {
+        formModel = new IntegrationFormModel
+        {
+            Id = integration.Id,
+            Name = integration.Name,
+            PluginType = integration.PluginType,
+            Enabled = integration.Enabled,
+            ConfigurationJson = integration.ConfigurationJson
+        };
+        isEditing = true;
+        jsonError = null;
+        showForm = true;
+    }
+
+    private void OnPluginTypeChanged()
+    {
+        // Provide an empty JSON template when a plugin is selected and config is empty/default
+        if (formModel.ConfigurationJson is "{}" or "")
+        {
+            formModel.ConfigurationJson = "{\n  \"url\": \"\",\n  \"apiKey\": \"\"\n}";
+        }
+    }
+
+    private void CloseForm() => showForm = false;
+
+    private async Task SaveIntegration()
+    {
+        jsonError = null;
+
+        // Validate JSON before saving
+        try
+        {
+            System.Text.Json.JsonDocument.Parse(formModel.ConfigurationJson);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            jsonError = $"Invalid JSON: {ex.Message}";
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            var entity = new Integration
+            {
+                Id = formModel.Id ?? Guid.NewGuid(),
+                Name = formModel.Name,
+                PluginType = formModel.PluginType,
+                Enabled = formModel.Enabled,
+                ConfigurationJson = formModel.ConfigurationJson
+            };
+
+            if (isEditing)
+            {
+                await IntegrationService.UpdateAsync(entity);
+                ShowSuccess("Integration updated successfully.");
+            }
+            else
+            {
+                await IntegrationService.CreateAsync(entity);
+                ShowSuccess("Integration added successfully.");
+            }
+
+            integrations = await IntegrationService.GetAllAsync();
+            showForm = false;
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to save integration: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ToggleEnabled(Integration integration)
+    {
+        isBusy = true;
+        try
+        {
+            integration.Enabled = !integration.Enabled;
+            await IntegrationService.UpdateAsync(integration);
+            integrations = await IntegrationService.GetAllAsync();
+            ShowSuccess($"Integration {(integration.Enabled ? "enabled" : "disabled")}.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to update integration: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task TestConnection(Guid id)
+    {
+        isBusy = true;
+        alertMessage = null;
+        try
+        {
+            var success = await IntegrationService.TestConnectionAsync(id);
+            if (success)
+            {
+                ShowSuccess("Connection test succeeded.");
+            }
+            else
+            {
+                ShowError("Connection test failed. Check the configuration and ensure the service is reachable.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Connection test error: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void ConfirmDelete(Integration integration)
+    {
+        deleteTargetId = integration.Id;
+        deleteConfirmMessage = $"Delete integration \"{integration.Name}\"? This cannot be undone.";
+        showDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        showDeleteConfirm = false;
+        isBusy = true;
+        try
+        {
+            await IntegrationService.DeleteAsync(deleteTargetId);
+            integrations = await IntegrationService.GetAllAsync();
+            ShowSuccess("Integration deleted.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to delete integration: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void ShowSuccess(string message)
+    {
+        alertMessage = message;
+        alertIsError = false;
+    }
+
+    private void ShowError(string message)
+    {
+        alertMessage = message;
+        alertIsError = true;
+    }
+
+    private sealed class IntegrationFormModel
+    {
+        public Guid? Id { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Name is required.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Plugin type is required.")]
+        public string PluginType { get; set; } = string.Empty;
+
+        public bool Enabled { get; set; } = true;
+
+        public string ConfigurationJson { get; set; } = "{}";
     }
 }

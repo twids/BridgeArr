@@ -1,49 +1,204 @@
 @page "/sync"
+@attribute [Authorize]
 @inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
+@inject BridgeArr.Application.Services.SyncService SyncService
 
-<PageTitle>Sync</PageTitle>
+<PageTitle>Sync – BridgeArr</PageTitle>
 
 <h1>Synchronization</h1>
 
-<section class="content-card">
-    <h2>Recent jobs</h2>
-    @if (jobs.Count == 0)
-    {
-        <p>No synchronization jobs have been recorded.</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Status</th>
-                    <th>Source</th>
-                    <th>Target</th>
-                    <th>Created</th>
-                    <th>Error</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var job in jobs)
-                {
+<AlertBanner Message="@alertMessage" IsError="@alertIsError" OnDismiss="@(() => alertMessage = null)" />
+
+<LoadingSpinner IsLoading="@isLoading" Text="Loading sync jobs…">
+    <section class="content-card">
+        <div class="section-header">
+            <h2>Sync jobs</h2>
+            <div class="filter-bar">
+                <select class="form-control form-control-sm" @bind="statusFilter" @bind:after="ApplyFilter">
+                    <option value="">All statuses</option>
+                    @foreach (var status in Enum.GetValues<SyncJobStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (filteredJobs.Count == 0)
+        {
+            <p class="muted">No synchronization jobs @(statusFilter != "" ? $"with status \"{statusFilter}\"" : "have been recorded") yet.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
                     <tr>
-                        <td>@job.Status</td>
-                        <td>@job.SourceIntegration?.Name</td>
-                        <td>@job.TargetIntegration?.Name</td>
-                        <td>@job.CreatedAt.ToLocalTime().ToString("u")</td>
-                        <td>@(job.ErrorMessage ?? "-")</td>
+                        <th>Status</th>
+                        <th>Source</th>
+                        <th>Target</th>
+                        <th>Created</th>
+                        <th>Duration</th>
+                        <th>Retries</th>
+                        <th>Actions</th>
                     </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in filteredJobs)
+                    {
+                        <tr>
+                            <td><StatusBadge Status="@job.Status.ToString()" /></td>
+                            <td>@(job.SourceIntegration?.Name ?? job.SourceIntegrationId.ToString()[..8])</td>
+                            <td>@(job.TargetIntegration?.Name ?? job.TargetIntegrationId.ToString()[..8])</td>
+                            <td>@job.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td>@FormatDuration(job)</td>
+                            <td>@job.RetryCount</td>
+                            <td class="action-cell">
+                                <button class="btn btn-secondary btn-sm"
+                                        @onclick="() => ViewDetails(job)">Details</button>
+                                @if (job.Status == SyncJobStatus.Failed)
+                                {
+                                    <button class="btn btn-primary btn-sm"
+                                            @onclick="() => RetryJob(job)"
+                                            disabled="@isBusy">Retry</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</LoadingSpinner>
+
+@* Job details panel *@
+@if (selectedJob is not null)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="details-title">
+        <div class="modal">
+            <h2 id="details-title">Sync job details</h2>
+            <dl class="detail-grid">
+                <dt>ID</dt>
+                <dd><code>@selectedJob.Id</code></dd>
+                <dt>Status</dt>
+                <dd><StatusBadge Status="@selectedJob.Status.ToString()" /></dd>
+                <dt>Source</dt>
+                <dd>@(selectedJob.SourceIntegration?.Name ?? selectedJob.SourceIntegrationId.ToString())</dd>
+                <dt>Target</dt>
+                <dd>@(selectedJob.TargetIntegration?.Name ?? selectedJob.TargetIntegrationId.ToString())</dd>
+                <dt>Created</dt>
+                <dd>@selectedJob.CreatedAt.ToLocalTime().ToString("u")</dd>
+                <dt>Started</dt>
+                <dd>@(selectedJob.StartedAt?.ToLocalTime().ToString("u") ?? "—")</dd>
+                <dt>Completed</dt>
+                <dd>@(selectedJob.CompletedAt?.ToLocalTime().ToString("u") ?? "—")</dd>
+                <dt>Duration</dt>
+                <dd>@FormatDuration(selectedJob)</dd>
+                <dt>Retry count</dt>
+                <dd>@selectedJob.RetryCount</dd>
+                @if (selectedJob.ErrorMessage is not null)
+                {
+                    <dt>Error</dt>
+                    <dd class="text-danger">@selectedJob.ErrorMessage</dd>
                 }
-            </tbody>
-        </table>
-    }
-</section>
+                @if (selectedJob.Payload is not null)
+                {
+                    <dt>Payload</dt>
+                    <dd><pre class="code-block">@selectedJob.Payload</pre></dd>
+                }
+            </dl>
+            <div class="modal-actions">
+                @if (selectedJob.Status == SyncJobStatus.Failed)
+                {
+                    <button class="btn btn-primary" @onclick="() => RetryJob(selectedJob)" disabled="@isBusy">
+                        Retry job
+                    </button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseDetails">Close</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
+    private bool isLoading = true;
+    private bool isBusy;
+    private string statusFilter = "";
+    private string? alertMessage;
+    private bool alertIsError;
+
     private IReadOnlyList<SyncJob> jobs = Array.Empty<SyncJob>();
+    private IReadOnlyList<SyncJob> filteredJobs = Array.Empty<SyncJob>();
+    private SyncJob? selectedJob;
 
     protected override async Task OnInitializedAsync()
     {
-        jobs = await SyncJobRepository.GetRecentAsync(25);
+        try
+        {
+            await LoadJobs();
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private async Task LoadJobs()
+    {
+        jobs = await SyncJobRepository.GetRecentAsync(100);
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrEmpty(statusFilter) ||
+            !Enum.TryParse<SyncJobStatus>(statusFilter, out var filter))
+        {
+            filteredJobs = jobs;
+            return;
+        }
+        filteredJobs = jobs.Where(j => j.Status == filter).ToList();
+    }
+
+    private async Task RetryJob(SyncJob job)
+    {
+        isBusy = true;
+        alertMessage = null;
+        try
+        {
+            var newJob = await SyncService.RequestSyncAsync(
+                job.SourceIntegrationId,
+                job.TargetIntegrationId,
+                job.Payload);
+
+            ShowSuccess($"Retry queued as job {newJob.Id}.");
+            selectedJob = null;
+            await LoadJobs();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to retry job: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void ViewDetails(SyncJob job) => selectedJob = job;
+    private void CloseDetails() => selectedJob = null;
+
+    private static string FormatDuration(SyncJob job)
+    {
+        if (job.StartedAt is null || job.CompletedAt is null)
+        {
+            return "—";
+        }
+        var duration = job.CompletedAt.Value - job.StartedAt.Value;
+        return duration.TotalSeconds < 60
+            ? $"{duration.TotalSeconds:F1}s"
+            : $"{duration.TotalMinutes:F1}m";
+    }
+
+    private void ShowSuccess(string message) { alertMessage = message; alertIsError = false; }
+    private void ShowError(string message) { alertMessage = message; alertIsError = true; }
 }

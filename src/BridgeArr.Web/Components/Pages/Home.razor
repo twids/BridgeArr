@@ -1,62 +1,128 @@
 @page "/"
+@attribute [Authorize]
 @inject BridgeArr.Application.Interfaces.IIntegrationRepository IntegrationRepository
 @inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
 
-<PageTitle>Dashboard</PageTitle>
+<PageTitle>Dashboard – BridgeArr</PageTitle>
 
 <h1>Dashboard</h1>
 
-<div class="card-grid">
-    <section class="content-card">
-        <h2>Overview</h2>
-        <dl class="stats-grid">
-            <div>
-                <dt>Configured integrations</dt>
-                <dd>@integrations.Count</dd>
-            </div>
-            <div>
-                <dt>Recent sync jobs</dt>
-                <dd>@recentJobs.Count</dd>
-            </div>
-            <div>
-                <dt>Failed jobs</dt>
-                <dd>@recentJobs.Count(job => job.Status == SyncJobStatus.Failed)</dd>
-            </div>
-            <div>
-                <dt>Queued jobs</dt>
-                <dd>@recentJobs.Count(job => job.Status == SyncJobStatus.Queued)</dd>
-            </div>
-        </dl>
-    </section>
+<LoadingSpinner IsLoading="@isLoading" Text="Loading dashboard…">
+    <div class="card-grid">
+        <section class="content-card">
+            <h2>Overview</h2>
+            <dl class="stats-grid">
+                <div>
+                    <dt>Configured integrations</dt>
+                    <dd>@integrations.Count</dd>
+                </div>
+                <div>
+                    <dt>Recent sync jobs</dt>
+                    <dd>@recentJobs.Count</dd>
+                </div>
+                <div>
+                    <dt>Failed jobs</dt>
+                    <dd class="@(failedCount > 0 ? "text-danger" : "")">@failedCount</dd>
+                </div>
+                <div>
+                    <dt>Queued jobs</dt>
+                    <dd>@queuedCount</dd>
+                </div>
+            </dl>
+        </section>
 
-    <section class="content-card">
-        <h2>Current integrations</h2>
-        @if (integrations.Count == 0)
-        {
-            <p>No integrations have been configured yet.</p>
-        }
-        else
-        {
-            <ul class="list-reset">
-                @foreach (var integration in integrations)
+        <section class="content-card">
+            <h2>Connected integrations</h2>
+            @if (integrations.Count == 0)
+            {
+                <p class="muted">No integrations have been configured yet.</p>
+                <a href="/integrations" class="btn btn-secondary btn-sm">Add integration</a>
+            }
+            else
+            {
+                <ul class="list-reset">
+                    @foreach (var integration in integrations)
+                    {
+                        <li class="list-item-row">
+                            <div>
+                                <strong>@integration.Name</strong>
+                                <span class="muted"> (@integration.PluginType)</span>
+                            </div>
+                            <StatusBadge Status="@(integration.Enabled ? "Enabled" : "Disabled")" />
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="content-card">
+            <h2>Recent sync jobs</h2>
+            @if (recentJobs.Count == 0)
+            {
+                <p class="muted">No sync jobs recorded yet.</p>
+            }
+            else
+            {
+                <ul class="list-reset">
+                    @foreach (var job in recentJobs.Take(5))
+                    {
+                        <li class="list-item-row">
+                            <div>
+                                <span class="muted">@job.SourceIntegration?.Name → @job.TargetIntegration?.Name</span>
+                                <br />
+                                <small class="muted">@job.CreatedAt.ToLocalTime().ToString("g")</small>
+                            </div>
+                            <StatusBadge Status="@job.Status.ToString()" />
+                        </li>
+                    }
+                </ul>
+                @if (recentJobs.Count > 5)
                 {
-                    <li>
-                        <strong>@integration.Name</strong>
-                        <span class="muted">(@integration.PluginType)</span>
-                    </li>
+                    <a href="/sync" class="btn btn-secondary btn-sm" style="margin-top:0.75rem">View all</a>
                 }
-            </ul>
-        }
-    </section>
-</div>
+            }
+        </section>
+
+        <section class="content-card">
+            <h2>Queue status</h2>
+            <dl class="stats-grid">
+                <div>
+                    <dt>Running</dt>
+                    <dd>@runningCount</dd>
+                </div>
+                <div>
+                    <dt>Queued</dt>
+                    <dd>@queuedCount</dd>
+                </div>
+                <div>
+                    <dt>Completed (recent)</dt>
+                    <dd>@completedCount</dd>
+                </div>
+            </dl>
+        </section>
+    </div>
+</LoadingSpinner>
 
 @code {
+    private bool isLoading = true;
     private IReadOnlyList<Integration> integrations = Array.Empty<Integration>();
     private IReadOnlyList<SyncJob> recentJobs = Array.Empty<SyncJob>();
 
+    private int failedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Failed);
+    private int queuedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Queued);
+    private int runningCount => recentJobs.Count(j => j.Status == SyncJobStatus.Running);
+    private int completedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Completed);
+
     protected override async Task OnInitializedAsync()
     {
-        integrations = await IntegrationRepository.GetAllAsync();
-        recentJobs = await SyncJobRepository.GetRecentAsync(10);
+        try
+        {
+            integrations = await IntegrationRepository.GetAllAsync();
+            recentJobs = await SyncJobRepository.GetRecentAsync(20);
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }

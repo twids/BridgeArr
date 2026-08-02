@@ -1,0 +1,21 @@
+@* Displays a coloured status badge for sync job or integration status. *@
+
+<span class="badge badge-@CssClass">@Label</span>
+
+@code {
+    [Parameter, EditorRequired] public string Status { get; set; } = string.Empty;
+
+    private string Label => Status;
+
+    private string CssClass => Status.ToLowerInvariant() switch
+    {
+        "queued"    => "queued",
+        "running"   => "running",
+        "completed" => "success",
+        "failed"    => "danger",
+        "cancelled" => "muted",
+        "enabled"   => "success",
+        "disabled"  => "muted",
+        _           => "muted"
+    };
+}

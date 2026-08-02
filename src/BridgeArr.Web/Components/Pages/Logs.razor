@@ -1,43 +1,190 @@
 @page "/logs"
+@attribute [Authorize]
 @inject BridgeArr.Application.Interfaces.IWebhookEventRepository WebhookEventRepository
 
-<PageTitle>Logs</PageTitle>
+<PageTitle>Logs – BridgeArr</PageTitle>
 
 <h1>Operational logs</h1>
 
-<div class="card-grid">
-    <section class="content-card">
-        <h2>Runtime logging</h2>
-        <p>Structured logs are written to the console and rolling files under <code>logs/</code>.</p>
-        <p>OpenTelemetry ASP.NET Core tracing is enabled for request instrumentation.</p>
-    </section>
+<LoadingSpinner IsLoading="@isLoading" Text="Loading events…">
+    <div class="card-grid">
+        <section class="content-card">
+            <h2>Runtime logging</h2>
+            <p>Structured logs are written to the console and rolling files under <code>logs/</code> via Serilog.</p>
+            <p>OpenTelemetry ASP.NET Core tracing is enabled for request instrumentation.</p>
+            <p class="muted">To view live logs, check the container stdout or the <code>logs/</code> directory on the host.</p>
+        </section>
 
-    <section class="content-card">
-        <h2>Pending webhook events</h2>
-        @if (events.Count == 0)
-        {
-            <p>No pending webhook events.</p>
-        }
-        else
-        {
-            <ul class="list-reset">
-                @foreach (var webhookEvent in events)
+        <section class="content-card">
+            <div class="section-header">
+                <h2>Webhook events</h2>
+                <span class="badge badge-queued">@filteredEvents.Count event(s)</span>
+            </div>
+
+            <div class="filter-bar" style="margin-bottom:1rem">
+                <input class="form-control form-control-sm"
+                       type="search"
+                       placeholder="Search by source or event type…"
+                       @bind="searchText"
+                       @bind:after="ApplyFilter" />
+                <select class="form-control form-control-sm"
+                        @bind="statusFilter"
+                        @bind:after="ApplyFilter">
+                    <option value="">All events</option>
+                    <option value="pending">Pending</option>
+                    <option value="processed">Processed</option>
+                    <option value="error">Errors</option>
+                </select>
+                <input class="form-control form-control-sm"
+                       type="date"
+                       @bind="dateFilter"
+                       @bind:after="ApplyFilter" />
+                <button class="btn btn-secondary btn-sm" @onclick="ClearFilters">Clear</button>
+            </div>
+
+            @if (filteredEvents.Count == 0)
+            {
+                <p class="muted">No webhook events match the current filters.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Received</th>
+                            <th>Source</th>
+                            <th>Event type</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var evt in filteredEvents)
+                        {
+                            <tr>
+                                <td>@evt.ReceivedAt.ToLocalTime().ToString("g")</td>
+                                <td>@evt.Source</td>
+                                <td>@evt.EventType</td>
+                                <td>
+                                    @if (evt.ProcessingError is not null)
+                                    {
+                                        <StatusBadge Status="Failed" />
+                                    }
+                                    else if (evt.Processed)
+                                    {
+                                        <StatusBadge Status="Completed" />
+                                    }
+                                    else
+                                    {
+                                        <StatusBadge Status="Queued" />
+                                    }
+                                </td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => ViewEvent(evt)">View</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+</LoadingSpinner>
+
+@* Event detail panel *@
+@if (selectedEvent is not null)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="event-title">
+        <div class="modal">
+            <h2 id="event-title">Webhook event details</h2>
+            <dl class="detail-grid">
+                <dt>ID</dt>
+                <dd><code>@selectedEvent.Id</code></dd>
+                <dt>Source</dt>
+                <dd>@selectedEvent.Source</dd>
+                <dt>Event type</dt>
+                <dd>@selectedEvent.EventType</dd>
+                <dt>Received</dt>
+                <dd>@selectedEvent.ReceivedAt.ToLocalTime().ToString("u")</dd>
+                <dt>Processed</dt>
+                <dd>@(selectedEvent.Processed ? (selectedEvent.ProcessedAt?.ToLocalTime().ToString("u") ?? "Yes") : "No")</dd>
+                @if (selectedEvent.ProcessingError is not null)
                 {
-                    <li>
-                        <strong>@webhookEvent.Source</strong>
-                        <span class="muted">@webhookEvent.EventType</span>
-                    </li>
+                    <dt>Error</dt>
+                    <dd class="text-danger">@selectedEvent.ProcessingError</dd>
                 }
-            </ul>
-        }
-    </section>
-</div>
+                <dt>Payload</dt>
+                <dd><pre class="code-block">@selectedEvent.Payload</pre></dd>
+            </dl>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @onclick="CloseEvent">Close</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
-    private IReadOnlyList<WebhookEvent> events = Array.Empty<WebhookEvent>();
+    private bool isLoading = true;
+    private string searchText = "";
+    private string statusFilter = "";
+    private DateOnly? dateFilter;
+
+    private IReadOnlyList<WebhookEvent> allEvents = Array.Empty<WebhookEvent>();
+    private IReadOnlyList<WebhookEvent> filteredEvents = Array.Empty<WebhookEvent>();
+    private WebhookEvent? selectedEvent;
 
     protected override async Task OnInitializedAsync()
     {
-        events = await WebhookEventRepository.GetUnprocessedAsync();
+        try
+        {
+            // Load all unprocessed + recently processed events for the log view
+            allEvents = await WebhookEventRepository.GetUnprocessedAsync();
+            ApplyFilter();
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private void ApplyFilter()
+    {
+        var query = allEvents.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var term = searchText.Trim().ToLowerInvariant();
+            query = query.Where(e =>
+                e.Source.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                e.EventType.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = statusFilter switch
+        {
+            "pending"   => query.Where(e => !e.Processed),
+            "processed" => query.Where(e => e.Processed && e.ProcessingError is null),
+            "error"     => query.Where(e => e.ProcessingError is not null),
+            _           => query
+        };
+
+        if (dateFilter.HasValue)
+        {
+            query = query.Where(e =>
+                DateOnly.FromDateTime(e.ReceivedAt.LocalDateTime) == dateFilter.Value);
+        }
+
+        filteredEvents = query.OrderByDescending(e => e.ReceivedAt).ToList();
+    }
+
+    private void ClearFilters()
+    {
+        searchText = "";
+        statusFilter = "";
+        dateFilter = null;
+        ApplyFilter();
+    }
+
+    private void ViewEvent(WebhookEvent evt) => selectedEvent = evt;
+    private void CloseEvent() => selectedEvent = null;
 }
