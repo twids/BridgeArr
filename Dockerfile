@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS base
 WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
@@ -9,7 +9,7 @@ RUN apt-get update \
     && addgroup --system --gid 1000 appgroup \
     && adduser --system --uid 1000 --ingroup appgroup --no-create-home appuser
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 COPY ["src/BridgeArr.Web/BridgeArr.Web.csproj", "src/BridgeArr.Web/"]
 COPY ["src/BridgeArr.Api/BridgeArr.Api.csproj", "src/BridgeArr.Api/"]
