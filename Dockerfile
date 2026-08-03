@@ -9,8 +9,13 @@ ENV ASPNETCORE_URLS=http://+:8080
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && addgroup --system --gid 1000 appgroup \
-    && adduser --system --uid 1000 --ingroup appgroup --no-create-home appuser
+        && if command -v addgroup >/dev/null 2>&1; then \
+                 addgroup --system --gid 1000 appgroup \
+                 && adduser --system --uid 1000 --ingroup appgroup --no-create-home appuser; \
+             else \
+                 groupadd --system --gid 1000 appgroup \
+                 && useradd --system --uid 1000 --gid appgroup --no-create-home --shell /bin/false appuser; \
+             fi
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${DOTNET_DISTRO_VARIANT} AS build
 WORKDIR /src
