@@ -30,20 +30,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
-      - "traefik.http.routers.bridgearr.rule=Host(`${BRIDGEARR_HOST:-bridgearr.localhost}`)"
-      - "traefik.http.routers.bridgearr.entrypoints=websecure"
-      - "traefik.http.routers.bridgearr.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.bridgearr.service=bridgearr"
-      - "traefik.http.routers.bridgearr-http.rule=Host(`${BRIDGEARR_HOST:-bridgearr.localhost}`)"
-      - "traefik.http.routers.bridgearr-http.entrypoints=web"
-      - "traefik.http.routers.bridgearr-http.middlewares=redirect-to-https@file"
-      - "traefik.http.services.bridgearr.loadbalancer.server.port=8080"
-    networks:
-      - default
-      - traefik
     restart: unless-stopped
 
   postgres:
@@ -65,7 +51,3 @@ volumes:
   postgres_data:
   bridgearr_logs:
   bridgearr_keys:
-
-networks:
-  traefik:
-    external: true
