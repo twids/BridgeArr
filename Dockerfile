@@ -1,4 +1,7 @@
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+ARG DOTNET_VERSION=10.0
+ARG DOTNET_DISTRO_VARIANT=noble
+
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-${DOTNET_DISTRO_VARIANT} AS base
 WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
@@ -6,10 +9,15 @@ ENV ASPNETCORE_URLS=http://+:8080
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && addgroup --system --gid 1000 appgroup \
-    && adduser --system --uid 1000 --ingroup appgroup --no-create-home appuser
+    && if command -v addgroup >/dev/null 2>&1; then \
+        addgroup --system appgroup \
+        && adduser --system --ingroup appgroup --no-create-home appuser; \
+    else \
+        groupadd --system appgroup \
+        && useradd --system --gid appgroup --no-create-home --shell /bin/false appuser; \
+    fi
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${DOTNET_DISTRO_VARIANT} AS build
 WORKDIR /src
 COPY ["src/BridgeArr.Web/BridgeArr.Web.csproj", "src/BridgeArr.Web/"]
 COPY ["src/BridgeArr.Api/BridgeArr.Api.csproj", "src/BridgeArr.Api/"]
