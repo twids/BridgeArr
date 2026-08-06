@@ -17,6 +17,10 @@ Services started:
 - `bridgearr` on port `8080`
 - `postgres` on the internal Docker network
 
+BridgeArr can also be published through an existing Traefik instance. Set
+`BRIDGEARR_HOST` to the public hostname, ensure the external `traefik` network
+exists, and change `BRIDGEARR_PORT` when port `8080` is already in use.
+
 Database migrations and default admin account seeding run automatically on startup.
 
 ### Default credentials
@@ -36,6 +40,8 @@ Configure `.env` (see `.env.example`) before first startup.
 | `POSTGRES_USER` | ✅ | PostgreSQL username |
 | `POSTGRES_PASSWORD` | ✅ | PostgreSQL password (use a strong value) |
 | `ASPNETCORE_ENVIRONMENT` | | Runtime environment (`Production` by default) |
+| `BRIDGEARR_HOST` | | Hostname used by the Traefik routers (`bridgearr.localhost` by default) |
+| `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
 | `PLEX_URL` | | Plex Media Server base URL |
 | `PLEX_TOKEN` | | Plex authentication token |
 | `RADARR_URL` | | Radarr base URL |
