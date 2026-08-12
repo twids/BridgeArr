@@ -14,8 +14,13 @@ curl http://localhost:8080/health
 
 Services started:
 
-- `bridgearr` on port `8080`
+- `bridgearr` on the host port configured by `BRIDGEARR_PORT` (`8080` by default)
 - `postgres` on the internal Docker network
+
+Reverse-proxy configuration is intentionally kept outside this Compose file.
+Configure the proxy in the deployment platform and route it to BridgeArr's
+published host port, or use a deployment-owned Compose override to attach the
+`bridgearr` service to the proxy network and route to container port `8080`.
 
 Database migrations and default admin account seeding run automatically on startup.
 
@@ -36,6 +41,7 @@ Configure `.env` (see `.env.example`) before first startup.
 | `POSTGRES_USER` | ✅ | PostgreSQL username |
 | `POSTGRES_PASSWORD` | ✅ | PostgreSQL password (use a strong value) |
 | `ASPNETCORE_ENVIRONMENT` | | Runtime environment (`Production` by default) |
+| `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
 | `DOTNET_VERSION` | | .NET image major/minor for Docker builds (`10.0` default) |
 | `DOTNET_DISTRO_VARIANT` | | Linux distro variant for Docker builds (`noble` default) |
 | `PLEX_URL` | | Plex Media Server base URL |
