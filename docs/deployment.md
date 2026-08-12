@@ -42,6 +42,8 @@ Configure `.env` (see `.env.example`) before first startup.
 | `POSTGRES_PASSWORD` | ✅ | PostgreSQL password (use a strong value) |
 | `ASPNETCORE_ENVIRONMENT` | | Runtime environment (`Production` by default) |
 | `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
+| `DOTNET_VERSION` | | .NET image major/minor for Docker builds (`10.0` default) |
+| `DOTNET_DISTRO_VARIANT` | | Linux distro variant for Docker builds (`noble` default) |
 | `PLEX_URL` | | Plex Media Server base URL |
 | `PLEX_TOKEN` | | Plex authentication token |
 | `RADARR_URL` | | Radarr base URL |
@@ -50,6 +52,10 @@ Configure `.env` (see `.env.example`) before first startup.
 | `SONARR_APIKEY` | | Sonarr API key |
 
 `ConnectionStrings__DefaultConnection` is assembled from `POSTGRES_*` values in `docker-compose.yml`.
+
+`DOTNET_VERSION` and `DOTNET_DISTRO_VARIANT` are passed into Docker build args.
+By default, BridgeArr uses full Ubuntu-based .NET images (`noble`) to ensure
+package-manager tooling is available for runtime health-check dependencies.
 
 ## Updating
 
