@@ -20,8 +20,14 @@ public static class EnvironmentIntegrationSeeder
 
         foreach (var definition in definitions)
         {
-            var integration = await db.Integrations
-                .SingleOrDefaultAsync(x => x.PluginType == definition.PluginType, cancellationToken);
+            var matchingIntegrations = await db.Integrations
+                .Where(x => x.PluginType == definition.PluginType)
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync(cancellationToken);
+            var integration = matchingIntegrations.FirstOrDefault();
+
+            if (matchingIntegrations.Count > 1)
+                logger.LogWarning("Found multiple {PluginType} integrations; updating the oldest entry.", definition.PluginType);
 
             if (integration is null)
             {
@@ -58,8 +64,16 @@ public static class EnvironmentIntegrationSeeder
 
     private static void AddIfComplete(List<EnvironmentIntegrationDefinition> definitions, string pluginType, string name, string? url, string secretName, string? secret)
     {
-        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(secret)) return;
-        definitions.Add(new(pluginType, name, JsonSerializer.Serialize(new Dictionary<string, string> { ["url"] = url, [secretName] = secret })));
+        var normalizedUrl = url?.Trim();
+        var normalizedSecret = secret?.Trim();
+        if (string.IsNullOrEmpty(normalizedUrl) || string.IsNullOrEmpty(normalizedSecret) ||
+            !Uri.TryCreate(normalizedUrl, UriKind.Absolute, out var parsedUrl) ||
+            (parsedUrl.Scheme != Uri.UriSchemeHttp && parsedUrl.Scheme != Uri.UriSchemeHttps))
+        {
+            return;
+        }
+
+        definitions.Add(new(pluginType, name, JsonSerializer.Serialize(new Dictionary<string, string> { ["url"] = normalizedUrl, [secretName] = normalizedSecret })));
     }
 }
 

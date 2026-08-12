@@ -1,6 +1,9 @@
 using System.Text.Json;
+using BridgeArr.Infrastructure.Data;
 using BridgeArr.Infrastructure.Seed;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BridgeArr.IntegrationTests.Configuration;
 
@@ -49,6 +52,48 @@ public class EnvironmentIntegrationSeederTests
         Assert.Empty(EnvironmentIntegrationSeeder.GetDefinitions(configuration));
     }
 
+    [Fact]
+    public async Task SeedAsync_ExistingIntegration_UpdatesWithoutCreatingDuplicate()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new ApplicationDbContext(options);
+        var initialConfiguration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["RADARR_URL"] = "http://radarr-old:7878",
+            ["RADARR_APIKEY"] = "old-secret"
+        });
+        var updatedConfiguration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["RADARR_URL"] = "http://radarr-new:7878",
+            ["RADARR_APIKEY"] = "new-secret"
+        });
+
+        await EnvironmentIntegrationSeeder.SeedAsync(db, initialConfiguration, NullLogger.Instance);
+        var originalId = (await db.Integrations.SingleAsync()).Id;
+        await EnvironmentIntegrationSeeder.SeedAsync(db, updatedConfiguration, NullLogger.Instance);
+
+        var integration = await db.Integrations.SingleAsync();
+        Assert.Equal(originalId, integration.Id);
+        using var json = JsonDocument.Parse(integration.ConfigurationJson);
+        Assert.Equal("http://radarr-new:7878", json.RootElement.GetProperty("url").GetString());
+        Assert.Equal("new-secret", json.RootElement.GetProperty("apiKey").GetString());
+    }
+
+    [Theory]
+    [InlineData("radarr")]
+    [InlineData("ftp://radarr:7878")]
+    public void GetDefinitions_InvalidUrl_SkipsIntegration(string url)
+    {
+        var configuration = BuildConfiguration(new Dictionary<string, string?>
+        {
+            ["RADARR_URL"] = url,
+            ["RADARR_APIKEY"] = "secret"
+        });
+
+        Assert.Empty(EnvironmentIntegrationSeeder.GetDefinitions(configuration));
+    }
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 }
