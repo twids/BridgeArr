@@ -29,6 +29,9 @@ public static class DatabaseSeeder
 
             await SeedRolesAsync(roleManager, logger);
             await SeedAdminUserAsync(userManager, logger);
+
+            var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            await EnvironmentIntegrationSeeder.SeedAsync(db, configuration, logger);
         }
         catch (Exception ex)
         {
