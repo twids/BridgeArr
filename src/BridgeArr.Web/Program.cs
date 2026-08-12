@@ -36,6 +36,7 @@ try
     builder.Services.AddBridgeArrApi();
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
+    builder.Services.AddCascadingAuthenticationState();
 
     builder.Services.AddRadarrPlugin();
     builder.Services.AddSonarrPlugin();

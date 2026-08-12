@@ -6,12 +6,10 @@
     <base href="/" />
     <link rel="stylesheet" href="app.css" />
     <title>BridgeArr</title>
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
-    <CascadingAuthenticationState>
-        <Routes />
-    </CascadingAuthenticationState>
+    <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>
