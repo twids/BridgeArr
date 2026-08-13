@@ -15,6 +15,7 @@ public static class DependencyInjection
     {
         services.AddScoped<SyncService>();
         services.AddScoped<WebhookService>();
+        services.AddScoped<SyncRouteService>();
         services.AddScoped<IntegrationService>();
         return services;
     }

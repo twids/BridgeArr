@@ -1,45 +1,37 @@
-using BridgeArr.Application.Interfaces;
 using BridgeArr.Application.Diagnostics;
+using BridgeArr.Application.Interfaces;
 using BridgeArr.Domain.Entities;
-using BridgeArr.Domain.Enums;
 using BridgeArr.Plugins.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace BridgeArr.Application.Services;
 
-/// <summary>
-/// Handles incoming webhook events from external systems.
-/// Persists the event and enqueues processing; returns immediately.
-/// </summary>
+/// <summary>Handles incoming webhook events from external systems.</summary>
 public class WebhookService
 {
     private readonly IWebhookEventRepository _webhookEventRepository;
     private readonly IIntegrationRepository _integrationRepository;
-    private readonly ISyncQueue _syncQueue;
-    private readonly ISyncJobRepository _syncJobRepository;
+    private readonly ISyncRouteRepository _syncRouteRepository;
+    private readonly SyncRouteService _syncRouteService;
     private readonly IEnumerable<IWebhookHandler> _handlers;
     private readonly ILogger<WebhookService> _logger;
 
     public WebhookService(
         IWebhookEventRepository webhookEventRepository,
         IIntegrationRepository integrationRepository,
-        ISyncQueue syncQueue,
-        ISyncJobRepository syncJobRepository,
+        ISyncRouteRepository syncRouteRepository,
+        SyncRouteService syncRouteService,
         IEnumerable<IWebhookHandler> handlers,
         ILogger<WebhookService> logger)
     {
         _webhookEventRepository = webhookEventRepository;
         _integrationRepository = integrationRepository;
-        _syncQueue = syncQueue;
-        _syncJobRepository = syncJobRepository;
+        _syncRouteRepository = syncRouteRepository;
+        _syncRouteService = syncRouteService;
         _handlers = handlers;
         _logger = logger;
     }
 
-    /// <summary>
-    /// Receives a webhook payload, persists it, and enqueues for processing.
-    /// Returns immediately without blocking.
-    /// </summary>
     public async Task<WebhookEvent> ReceiveAsync(
         string source,
         string eventType,
@@ -55,28 +47,20 @@ public class WebhookService
         };
 
         webhookEvent = await _webhookEventRepository.AddAsync(webhookEvent, cancellationToken);
-        var sanitizedSource = LogSanitizer.Sanitize(source);
-        var sanitizedEventType = LogSanitizer.Sanitize(eventType);
         _logger.LogInformation(
             "Received webhook from {Source} type {EventType}, event ID {EventId}",
-            sanitizedSource,
-            sanitizedEventType,
+            LogSanitizer.Sanitize(source),
+            LogSanitizer.Sanitize(eventType),
             webhookEvent.Id);
-
         return webhookEvent;
     }
 
-    /// <summary>
-    /// Processes a persisted webhook event.
-    /// </summary>
     public async Task ProcessAsync(WebhookEvent webhookEvent, CancellationToken cancellationToken = default)
     {
         var handler = _handlers.FirstOrDefault(h => h.Source == webhookEvent.Source);
         if (handler is null)
         {
-            _logger.LogWarning(
-                "No handler found for webhook source {Source}",
-                LogSanitizer.Sanitize(webhookEvent.Source));
+            _logger.LogWarning("No handler found for webhook source {Source}", LogSanitizer.Sanitize(webhookEvent.Source));
             webhookEvent.Processed = true;
             webhookEvent.ProcessingError = $"No handler registered for source: {webhookEvent.Source}";
             webhookEvent.ProcessedAt = DateTimeOffset.UtcNow;
@@ -90,33 +74,18 @@ public class WebhookService
             if (result.Success && result.MediaItem is not null)
             {
                 var integrations = await _integrationRepository.GetEnabledAsync(cancellationToken);
-                var sourceIntegration = integrations.FirstOrDefault(i => i.PluginType == handler.PluginType);
-                var targetIntegrations = integrations.Where(i => i.PluginType != handler.PluginType).ToList();
-
+                var sourceIntegration = integrations.FirstOrDefault(i => i.PluginType.Equals(handler.PluginType, StringComparison.OrdinalIgnoreCase));
                 if (sourceIntegration is not null)
                 {
-                    foreach (var target in targetIntegrations)
-                    {
-                        var job = new SyncJob
-                        {
-                            SourceIntegrationId = sourceIntegration.Id,
-                            TargetIntegrationId = target.Id,
-                            Status = SyncJobStatus.Queued,
-                            Payload = webhookEvent.Payload
-                        };
-
-                        job = await _syncJobRepository.AddAsync(job, cancellationToken);
-                        await _syncQueue.EnqueueAsync(job, cancellationToken);
-                    }
+                    var routes = await _syncRouteRepository.GetEnabledAsync(cancellationToken);
+                    foreach (var route in routes.Where(x => x.SourceIntegrationId == sourceIntegration.Id))
+                        await _syncRouteService.QueueAsync(route, webhookEvent.Payload, cancellationToken);
                 }
             }
 
             webhookEvent.Processed = true;
             webhookEvent.ProcessedAt = DateTimeOffset.UtcNow;
-            if (!result.Success)
-            {
-                webhookEvent.ProcessingError = result.ErrorMessage;
-            }
+            if (!result.Success) webhookEvent.ProcessingError = result.ErrorMessage;
         }
         catch (Exception ex)
         {

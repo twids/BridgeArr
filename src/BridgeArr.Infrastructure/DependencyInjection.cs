@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationRepository, IntegrationRepository>();
         services.AddScoped<ISyncJobRepository, SyncJobRepository>();
         services.AddScoped<IWebhookEventRepository, WebhookEventRepository>();
+        services.AddScoped<ISyncRouteRepository, SyncRouteRepository>();
         services.AddScoped<IApplicationSettingRepository, ApplicationSettingRepository>();
 
         services.AddSingleton<ISyncQueue, InMemorySyncQueue>();
