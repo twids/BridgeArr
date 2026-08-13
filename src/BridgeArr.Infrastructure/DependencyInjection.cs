@@ -28,6 +28,7 @@ public static class DependencyInjection
 
         services.AddSingleton<ISyncQueue, InMemorySyncQueue>();
         services.AddHostedService<SyncWorker>();
+        services.AddHostedService<ScheduledSyncWorker>();
 
         return services;
     }
