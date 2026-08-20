@@ -206,7 +206,7 @@
 
     private void OpenRouteForm()
     {
-        routeForm = new SyncRoute { IntervalMinutes = 60, Enabled = true };
+        routeForm = new SyncRoute { Id = Guid.Empty, IntervalMinutes = 60, Enabled = true };
         showRouteForm = true;
     }
 

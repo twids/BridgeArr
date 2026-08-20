@@ -28,9 +28,19 @@ public class SyncRouteRepository : ISyncRouteRepository
 
     public async Task<SyncRoute> UpdateAsync(SyncRoute route, CancellationToken cancellationToken = default)
     {
-        _db.SyncRoutes.Update(route);
+        var existing = await _db.SyncRoutes.FindAsync([route.Id], cancellationToken)
+            ?? throw new KeyNotFoundException($"Sync route '{route.Id}' was not found.");
+
+        existing.Name = route.Name;
+        existing.SourceIntegrationId = route.SourceIntegrationId;
+        existing.TargetIntegrationId = route.TargetIntegrationId;
+        existing.Enabled = route.Enabled;
+        existing.IntervalMinutes = route.IntervalMinutes;
+        existing.LastQueuedAt = route.LastQueuedAt;
+        existing.CreatedAt = route.CreatedAt;
+        existing.UpdatedAt = route.UpdatedAt;
         await _db.SaveChangesAsync(cancellationToken);
-        return route;
+        return existing;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
