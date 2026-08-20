@@ -7,7 +7,8 @@
 ```bash
 cp .env.example .env
 # edit .env and set secure values (at minimum POSTGRES_PASSWORD)
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 curl http://localhost:8080/health
 ```
@@ -42,8 +43,7 @@ Configure `.env` (see `.env.example`) before first startup.
 | `POSTGRES_PASSWORD` | ✅ | PostgreSQL password (use a strong value) |
 | `ASPNETCORE_ENVIRONMENT` | | Runtime environment (`Production` by default) |
 | `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
-| `DOTNET_VERSION` | | .NET image major/minor for Docker builds (`10.0` default) |
-| `DOTNET_DISTRO_VARIANT` | | Linux distro variant for Docker builds (`noble` default) |
+| `BRIDGEARR_VERSION` | | GHCR image tag (`stable` by default) |
 | `PLEX_URL` | | Plex Media Server base URL |
 | `PLEX_TOKEN` | | Plex authentication token |
 | `RADARR_URL` | | Radarr base URL |
@@ -53,18 +53,40 @@ Configure `.env` (see `.env.example`) before first startup.
 
 `ConnectionStrings__DefaultConnection` is assembled from `POSTGRES_*` values in `docker-compose.yml`.
 
-`DOTNET_VERSION` and `DOTNET_DISTRO_VARIANT` are passed into Docker build args.
-By default, BridgeArr uses full Ubuntu-based .NET images (`noble`) to ensure
-package-manager tooling is available for runtime health-check dependencies.
-
 ## Updating
 
 ```bash
 docker compose pull
-docker compose build
-docker compose up -d --build
+docker compose up -d
 docker image prune -f
 ```
+
+## Automated releases and Dockhand deployment
+
+Merges to `master` are released automatically after CI and CodeQL succeed.
+The merged pull request may carry one of `release:major`, `release:minor`, or
+`release:patch`; without a release label, patch is used. The first release is
+`v0.1.0`.
+
+The workflow publishes a multi-platform candidate to GHCR, points `stable` at
+the candidate, synchronizes and redeploys the Dockhand Git stack, and verifies
+`/health`. Only a healthy deployment receives immutable `vX.Y.Z` and `latest`
+tags and a GitHub Release. A failed deployment restores the previous `stable`
+digest and redeploys it automatically.
+
+Configure a GitHub Environment named `production` with secret
+`DOCKHAND_TOKEN` and variables `DOCKHAND_URL`, `DOCKHAND_ENV_ID`,
+`DOCKHAND_GIT_STACK_ID`, `DOCKHAND_STACK_NAME`, and
+`BRIDGEARR_HEALTH_URL`. Repository variable `AUTO_DEPLOY_ENABLED` must remain
+`false` during bootstrap and be changed to `true` after the first successful
+manual run of **Release and deploy**.
+
+The GHCR package must be public so Dockhand can pull it without registry
+credentials. Making a package public is permanent on GitHub.
+
+To redeploy an existing release, set `BRIDGEARR_VERSION` to its immutable
+`vX.Y.Z` tag in Dockhand and redeploy the stack. Change it back to `stable` to
+resume automated releases.
 
 ## Backup and restore
 
@@ -112,5 +134,6 @@ docker compose logs -f postgres
 
 ```bash
 docker compose down -v
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
