@@ -23,7 +23,8 @@ BridgeArr is a modular media integration platform that connects applications in 
 ```bash
 cp .env.example .env
 # edit .env and set secure values, especially POSTGRES_PASSWORD
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Then open `http://localhost:8080` and log in with:

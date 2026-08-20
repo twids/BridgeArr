@@ -17,6 +17,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-versioning:
+    name: Test release versioning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test version calculation
+        run: python -m unittest discover --start-directory tests/release --verbose
+
   build-test:
     name: Build and test (.NET)
     runs-on: ubuntu-latest
