@@ -70,7 +70,8 @@ The merged pull request may carry one of `release:major`, `release:minor`, or
 
 The workflow publishes a multi-platform candidate to GHCR, points `stable` at
 the candidate, synchronizes and redeploys the Dockhand Git stack, and verifies
-`/health`. Only a healthy deployment receives immutable `vX.Y.Z` and `latest`
+through the Dockhand API that the expected `stable` image passes its `/health`
+container check. Only a healthy deployment receives immutable `vX.Y.Z` and `latest`
 tags and a GitHub Release. A failed deployment restores the previous `stable`
 digest and redeploys it automatically.
 

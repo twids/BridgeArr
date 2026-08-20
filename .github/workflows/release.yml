@@ -47,7 +47,6 @@ jobs:
       DOCKHAND_URL: ${{ vars.DOCKHAND_URL }}
       DOCKHAND_ENV_ID: ${{ vars.DOCKHAND_ENV_ID }}
       DOCKHAND_GIT_STACK_ID: ${{ vars.DOCKHAND_GIT_STACK_ID }}
-      HEALTH_URL: ${{ vars.BRIDGEARR_HEALTH_URL }}
       DOCKHAND_TOKEN: ${{ secrets.DOCKHAND_TOKEN }}
 
     steps:
@@ -73,7 +72,7 @@ jobs:
       - name: Validate deployment configuration
         run: |
           missing=0
-          for name in DOCKHAND_URL DOCKHAND_ENV_ID DOCKHAND_GIT_STACK_ID HEALTH_URL DOCKHAND_TOKEN; do
+          for name in DOCKHAND_URL DOCKHAND_ENV_ID DOCKHAND_GIT_STACK_ID DOCKHAND_TOKEN; do
             if [[ -z "${!name}" ]]; then
               echo "::error::$name is not configured in the production environment."
               missing=1
@@ -160,22 +159,23 @@ jobs:
 
       - name: Sync and deploy Dockhand stack
         run: |
-          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID"
+          response=$(curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID")
+          echo "$response" | jq -e '.success == true' >/dev/null
 
       - name: Verify BridgeArr health
         env:
           SIMULATE_FAILURE: ${{ inputs.simulate_health_failure }}
         run: |
-          health_url="$HEALTH_URL"
           if [[ "$SIMULATE_FAILURE" == "true" ]]; then
             echo "::error::Simulating a failed healthcheck to exercise rollback."
             exit 1
           fi
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error "$health_url" | jq -e '.status == "ok"' >/dev/null; then exit 0; fi
+            containers=$(curl --fail --silent --show-error --header "Authorization: Bearer $DOCKHAND_TOKEN" "$DOCKHAND_URL/api/containers?env=$DOCKHAND_ENV_ID")
+            if echo "$containers" | jq -e --arg image "$IMAGE:stable" 'any(.[]; .labels["com.docker.compose.project"] == "bridgearr" and .labels["com.docker.compose.service"] == "bridgearr" and .image == $image and .health == "healthy")' >/dev/null; then exit 0; fi
             sleep 10
           done
-          echo "::error::BridgeArr did not become healthy within five minutes."
+          echo "::error::Dockhand did not report the expected BridgeArr stable image as healthy within five minutes."
           exit 1
 
       - name: Publish immutable tags
@@ -195,9 +195,11 @@ jobs:
         if: failure() && steps.rollback.outputs.digest != ''
         run: |
           docker buildx imagetools create --tag "$IMAGE:stable" "$IMAGE@${{ steps.rollback.outputs.digest }}"
-          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID"
+          response=$(curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID")
+          echo "$response" | jq -e '.success == true' >/dev/null
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error "$HEALTH_URL" | jq -e '.status == "ok"' >/dev/null; then
+            containers=$(curl --fail --silent --show-error --header "Authorization: Bearer $DOCKHAND_TOKEN" "$DOCKHAND_URL/api/containers?env=$DOCKHAND_ENV_ID")
+            if echo "$containers" | jq -e --arg image "$IMAGE:stable" 'any(.[]; .labels["com.docker.compose.project"] == "bridgearr" and .labels["com.docker.compose.service"] == "bridgearr" and .image == $image and .health == "healthy")' >/dev/null; then
               echo "Rollback completed successfully."
               exit 0
             fi
