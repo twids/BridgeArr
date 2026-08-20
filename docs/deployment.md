@@ -76,8 +76,9 @@ digest and redeploys it automatically.
 
 Configure a GitHub Environment named `production` with secret
 `DOCKHAND_TOKEN` and variables `DOCKHAND_URL`, `DOCKHAND_ENV_ID`,
-`DOCKHAND_GIT_STACK_ID`, `DOCKHAND_STACK_NAME`, and
-`BRIDGEARR_HEALTH_URL`. Repository variable `AUTO_DEPLOY_ENABLED` must remain
+`DOCKHAND_GIT_STACK_ID`, and `BRIDGEARR_HEALTH_URL`. Configure the Dockhand
+Git stack to disable builds and enable image repulls and forced redeployment.
+Repository variable `AUTO_DEPLOY_ENABLED` must remain
 `false` during bootstrap and be changed to `true` after the first successful
 manual run of **Release and deploy**.
 

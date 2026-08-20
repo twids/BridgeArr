@@ -47,7 +47,6 @@ jobs:
       DOCKHAND_URL: ${{ vars.DOCKHAND_URL }}
       DOCKHAND_ENV_ID: ${{ vars.DOCKHAND_ENV_ID }}
       DOCKHAND_GIT_STACK_ID: ${{ vars.DOCKHAND_GIT_STACK_ID }}
-      DOCKHAND_STACK_NAME: ${{ vars.DOCKHAND_STACK_NAME }}
       HEALTH_URL: ${{ vars.BRIDGEARR_HEALTH_URL }}
       DOCKHAND_TOKEN: ${{ secrets.DOCKHAND_TOKEN }}
 
@@ -74,7 +73,7 @@ jobs:
       - name: Validate deployment configuration
         run: |
           missing=0
-          for name in DOCKHAND_URL DOCKHAND_ENV_ID DOCKHAND_GIT_STACK_ID DOCKHAND_STACK_NAME HEALTH_URL DOCKHAND_TOKEN; do
+          for name in DOCKHAND_URL DOCKHAND_ENV_ID DOCKHAND_GIT_STACK_ID HEALTH_URL DOCKHAND_TOKEN; do
             if [[ -z "${!name}" ]]; then
               echo "::error::$name is not configured in the production environment."
               missing=1
@@ -161,8 +160,7 @@ jobs:
 
       - name: Sync and deploy Dockhand stack
         run: |
-          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/sync"
-          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" --header "Content-Type: application/json" --data '{"pull":true,"build":false,"forceRecreate":true}' "$DOCKHAND_URL/api/stacks/$DOCKHAND_STACK_NAME/deploy?env=$DOCKHAND_ENV_ID"
+          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID"
 
       - name: Verify BridgeArr health
         env:
@@ -197,7 +195,7 @@ jobs:
         if: failure() && steps.rollback.outputs.digest != ''
         run: |
           docker buildx imagetools create --tag "$IMAGE:stable" "$IMAGE@${{ steps.rollback.outputs.digest }}"
-          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" --header "Content-Type: application/json" --data '{"pull":true,"build":false,"forceRecreate":true}' "$DOCKHAND_URL/api/stacks/$DOCKHAND_STACK_NAME/deploy?env=$DOCKHAND_ENV_ID"
+          curl --fail-with-body --silent --show-error --request POST --header "Authorization: Bearer $DOCKHAND_TOKEN" --header "Accept: application/json" "$DOCKHAND_URL/api/git/stacks/$DOCKHAND_GIT_STACK_ID/deploy?env=$DOCKHAND_ENV_ID"
           for attempt in {1..30}; do
             if curl --fail --silent --show-error "$HEALTH_URL" | jq -e '.status == "ok"' >/dev/null; then
               echo "Rollback completed successfully."
