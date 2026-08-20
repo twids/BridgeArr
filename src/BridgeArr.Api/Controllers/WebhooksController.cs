@@ -7,7 +7,7 @@ namespace BridgeArr.Api.Controllers;
 
 /// <summary>
 /// Receives incoming webhooks from external systems.
-/// Returns immediately and processes asynchronously.
+/// Persists and processes webhook events before acknowledging them.
 /// </summary>
 [ApiController]
 [Route("api/webhooks")]
@@ -37,7 +37,7 @@ public class WebhooksController : ControllerBase
             payload,
             cancellationToken);
 
-        _ = Task.Run(() => _webhookService.ProcessAsync(webhookEvent), CancellationToken.None);
+        await _webhookService.ProcessAsync(webhookEvent, cancellationToken);
         _logger.LogInformation(
             "Accepted webhook {WebhookEventId} from {Source}",
             webhookEvent.Id,

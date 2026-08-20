@@ -16,6 +16,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<SyncJob> SyncJobs => Set<SyncJob>();
+    public DbSet<SyncRoute> SyncRoutes => Set<SyncRoute>();
     public DbSet<SyncHistory> SyncHistories => Set<SyncHistory>();
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<PluginConfiguration> PluginConfigurations => Set<PluginConfiguration>();
@@ -46,6 +47,21 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasForeignKey(x => x.TargetIntegrationId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.Status);
+        });
+        builder.Entity<SyncRoute>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.HasOne(x => x.SourceIntegration)
+                .WithMany()
+                .HasForeignKey(x => x.SourceIntegrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.TargetIntegration)
+                .WithMany()
+                .HasForeignKey(x => x.TargetIntegrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.SourceIntegrationId, x.TargetIntegrationId }).IsUnique();
+            entity.HasIndex(x => x.Enabled);
         });
 
         builder.Entity<SyncHistory>(entity =>

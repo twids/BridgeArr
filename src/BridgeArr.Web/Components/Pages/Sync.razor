@@ -2,12 +2,71 @@
 @attribute [Authorize]
 @inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
 @inject BridgeArr.Application.Services.SyncService SyncService
+@inject BridgeArr.Application.Services.SyncRouteService SyncRouteService
+@inject BridgeArr.Application.Services.IntegrationService IntegrationService
 
 <PageTitle>Sync – BridgeArr</PageTitle>
 
 <h1>Synchronization</h1>
 
 <AlertBanner Message="@alertMessage" IsError="@alertIsError" OnDismiss="@(() => alertMessage = null)" />
+<section class="content-card">
+    <div class="section-header">
+        <h2>Sync routes</h2>
+        <button class="btn btn-primary btn-sm" @onclick="OpenRouteForm">Add route</button>
+    </div>
+    @if (routes.Count == 0)
+    {
+        <p class="muted">No scheduled synchronization routes configured.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead><tr><th>Name</th><th>Source</th><th>Target</th><th>Interval</th><th>Last queued</th><th>Actions</th></tr></thead>
+            <tbody>
+            @foreach (var route in routes)
+            {
+                <tr>
+                    <td>@route.Name</td>
+                    <td>@route.SourceIntegration?.Name</td>
+                    <td>@route.TargetIntegration?.Name</td>
+                    <td>@route.IntervalMinutes min</td>
+                    <td>@(route.LastQueuedAt?.ToLocalTime().ToString("g") ?? "Never")</td>
+                    <td class="action-cell">
+                        <button class="btn btn-primary btn-sm" @onclick="() => RunRoute(route)" disabled="@isBusy">Run now</button>
+                        <button class="btn btn-secondary btn-sm" @onclick="() => EditRoute(route)">Edit</button>
+                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteRoute(route.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+
+@if (showRouteForm)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="route-title">
+        <div class="modal">
+            <h2 id="route-title">@(routeForm.Id == Guid.Empty ? "Add sync route" : "Edit sync route")</h2>
+            <EditForm Model="routeForm" OnValidSubmit="SaveRoute" FormName="SyncRouteForm">
+                <DataAnnotationsValidator />
+                <div class="form-group"><label>Name</label><InputText class="form-control" @bind-Value="routeForm.Name" /></div>
+                <div class="form-group"><label>Source</label><InputSelect class="form-control" @bind-Value="routeForm.SourceIntegrationId">
+                    <option value="@Guid.Empty">Select source</option>
+                    @foreach (var item in sourceIntegrations) { <option value="@item.Id">@item.Name</option> }
+                </InputSelect></div>
+                <div class="form-group"><label>Target</label><InputSelect class="form-control" @bind-Value="routeForm.TargetIntegrationId">
+                    <option value="@Guid.Empty">Select target</option>
+                    @foreach (var item in targetIntegrations) { <option value="@item.Id">@item.Name</option> }
+                </InputSelect></div>
+                <div class="form-group"><label>Interval (minutes)</label><InputNumber class="form-control" @bind-Value="routeForm.IntervalMinutes" /></div>
+                <div class="form-group"><label class="checkbox-label"><InputCheckbox @bind-Value="routeForm.Enabled" /> Enabled</label></div>
+                <div class="modal-actions"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-secondary" type="button" @onclick="CloseRouteForm">Cancel</button></div>
+            </EditForm>
+        </div>
+    </div>
+}
 
 <LoadingSpinner IsLoading="@isLoading" Text="Loading sync jobs…">
     <section class="content-card">
@@ -118,7 +177,6 @@
         </div>
     </div>
 }
-
 @code {
     private bool isLoading = true;
     private bool isBusy;
@@ -129,6 +187,72 @@
     private IReadOnlyList<SyncJob> jobs = Array.Empty<SyncJob>();
     private IReadOnlyList<SyncJob> filteredJobs = Array.Empty<SyncJob>();
     private SyncJob? selectedJob;
+    private IReadOnlyList<SyncRoute> routes = Array.Empty<SyncRoute>();
+    private IReadOnlyList<Integration> sourceIntegrations = Array.Empty<Integration>();
+    private IReadOnlyList<Integration> targetIntegrations = Array.Empty<Integration>();
+    private SyncRoute routeForm = new();
+    private bool showRouteForm;
+
+    private async Task LoadRoutes()
+    {
+        routes = await SyncRouteService.GetAllAsync();
+        var integrations = await IntegrationService.GetAllAsync();
+        var plugins = IntegrationService.GetAvailablePlugins().ToList();
+        var sourceTypes = plugins.Where(x => x.Capabilities.HasFlag(BridgeArr.Plugins.Abstractions.PluginCapabilities.MediaSource)).Select(x => x.PluginType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var targetTypes = plugins.Where(x => x.Capabilities.HasFlag(BridgeArr.Plugins.Abstractions.PluginCapabilities.MediaTarget)).Select(x => x.PluginType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        sourceIntegrations = integrations.Where(x => x.Enabled && sourceTypes.Contains(x.PluginType)).ToList();
+        targetIntegrations = integrations.Where(x => x.Enabled && targetTypes.Contains(x.PluginType)).ToList();
+    }
+
+    private void OpenRouteForm()
+    {
+        routeForm = new SyncRoute { IntervalMinutes = 60, Enabled = true };
+        showRouteForm = true;
+    }
+
+    private void EditRoute(SyncRoute route)
+    {
+        routeForm = new SyncRoute { Id = route.Id, Name = route.Name, SourceIntegrationId = route.SourceIntegrationId, TargetIntegrationId = route.TargetIntegrationId, Enabled = route.Enabled, IntervalMinutes = route.IntervalMinutes, LastQueuedAt = route.LastQueuedAt, CreatedAt = route.CreatedAt };
+        showRouteForm = true;
+    }
+
+    private void CloseRouteForm() => showRouteForm = false;
+
+    private async Task SaveRoute()
+    {
+        try
+        {
+            if (routeForm.Id == Guid.Empty) await SyncRouteService.CreateAsync(routeForm);
+            else await SyncRouteService.UpdateAsync(routeForm);
+            showRouteForm = false;
+            await LoadRoutes();
+            ShowSuccess("Sync route saved.");
+        }
+        catch (Exception ex) { ShowError($"Failed to save route: {ex.Message}"); }
+    }
+
+    private async Task RunRoute(SyncRoute route)
+    {
+        isBusy = true;
+        try
+        {
+            var job = await SyncRouteService.QueueAsync(route);
+            await LoadRoutes();
+            await LoadRoutes();
+            await LoadJobs();
+            if (job is null) ShowError("A matching sync job is already active.");
+            else ShowSuccess($"Sync queued as job {job.Id}.");
+        }
+        catch (Exception ex) { ShowError($"Failed to run route: {ex.Message}"); }
+        finally { isBusy = false; }
+    }
+
+    private async Task DeleteRoute(Guid id)
+    {
+        await SyncRouteService.DeleteAsync(id);
+        await LoadRoutes();
+        ShowSuccess("Sync route deleted.");
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -202,3 +326,4 @@
     private void ShowSuccess(string message) { alertMessage = message; alertIsError = false; }
     private void ShowError(string message) { alertMessage = message; alertIsError = true; }
 }
+
