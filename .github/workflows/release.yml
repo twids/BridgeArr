@@ -113,9 +113,6 @@ jobs:
           echo "short_sha=${sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "full_sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -131,7 +128,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE }}:sha-${{ steps.version.outputs.short_sha }}
           labels: |
@@ -156,7 +153,7 @@ jobs:
             exit 0
           fi
           git worktree add /tmp/bridgearr-previous HEAD^
-          docker buildx build --platform linux/amd64,linux/arm64 --push --tag "$IMAGE:rollback-bootstrap" /tmp/bridgearr-previous
+          docker buildx build --platform linux/amd64 --push --tag "$IMAGE:rollback-bootstrap" /tmp/bridgearr-previous
           raw=$(docker buildx imagetools inspect "$IMAGE:rollback-bootstrap" --raw)
           digest="sha256:$(printf '%s' "$raw" | sha256sum | awk '{print $1}')"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
