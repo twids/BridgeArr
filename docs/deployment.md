@@ -68,7 +68,7 @@ The merged pull request may carry one of `release:major`, `release:minor`, or
 `release:patch`; without a release label, patch is used. The first release is
 `v0.1.0`.
 
-The workflow publishes a multi-platform candidate to GHCR, points `stable` at
+The workflow publishes a `linux/amd64` candidate to GHCR, points `stable` at
 the candidate, synchronizes and redeploys the Dockhand Git stack, and verifies
 through the Dockhand API that the expected `stable` image passes its `/health`
 container check. Only a healthy deployment receives immutable `vX.Y.Z` and `latest`
