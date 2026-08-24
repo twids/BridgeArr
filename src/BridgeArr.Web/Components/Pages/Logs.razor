@@ -1,190 +1,108 @@
+@page "/activity"
 @page "/logs"
 @attribute [Authorize]
+@inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
 @inject BridgeArr.Application.Interfaces.IWebhookEventRepository WebhookEventRepository
 
-<PageTitle>Logs – BridgeArr</PageTitle>
+<PageTitle>Activity – BridgeArr</PageTitle>
 
-<h1>Operational logs</h1>
+<header class="page-header">
+    <div><span class="eyebrow">History & diagnostics</span><h1>Activity</h1><p>Follow label syncs, investigate failures and inspect incoming webhooks when needed.</p></div>
+</header>
 
-<LoadingSpinner IsLoading="@isLoading" Text="Loading events…">
-    <div class="card-grid">
-        <section class="content-card">
-            <h2>Runtime logging</h2>
-            <p>Structured logs are written to the console and rolling files under <code>logs/</code> via Serilog.</p>
-            <p>OpenTelemetry ASP.NET Core tracing is enabled for request instrumentation.</p>
-            <p class="muted">To view live logs, check the container stdout or the <code>logs/</code> directory on the host.</p>
-        </section>
+<LoadingSpinner IsLoading="@isLoading" Text="Loading activity…">
+    <div class="segmented-control" role="tablist">
+        <button class="@(activeView == "sync" ? "active" : "")" @onclick='@(() => activeView = "sync")'>Sync runs <span>@filteredJobs.Count</span></button>
+        <button class="@(activeView == "webhooks" ? "active" : "")" @onclick='@(() => activeView = "webhooks")'>Webhook diagnostics <span>@filteredEvents.Count</span></button>
+    </div>
 
-        <section class="content-card">
-            <div class="section-header">
-                <h2>Webhook events</h2>
-                <span class="badge badge-queued">@filteredEvents.Count event(s)</span>
-            </div>
-
-            <div class="filter-bar" style="margin-bottom:1rem">
-                <input class="form-control form-control-sm"
-                       type="search"
-                       placeholder="Search by source or event type…"
-                       @bind="searchText"
-                       @bind:after="ApplyFilter" />
-                <select class="form-control form-control-sm"
-                        @bind="statusFilter"
-                        @bind:after="ApplyFilter">
-                    <option value="">All events</option>
-                    <option value="pending">Pending</option>
-                    <option value="processed">Processed</option>
-                    <option value="error">Errors</option>
-                </select>
-                <input class="form-control form-control-sm"
-                       type="date"
-                       @bind="dateFilter"
-                       @bind:after="ApplyFilter" />
-                <button class="btn btn-secondary btn-sm" @onclick="ClearFilters">Clear</button>
-            </div>
-
-            @if (filteredEvents.Count == 0)
+    @if (activeView == "sync")
+    {
+        <section class="panel">
+            <div class="section-header"><div><span class="eyebrow">Latest 100</span><h2>Sync runs</h2></div><div class="filter-bar"><select class="form-control form-control-sm" @bind="jobStatusFilter" @bind:after="ApplyFilters"><option value="">All statuses</option>@foreach (var status in Enum.GetValues<SyncJobStatus>()) { <option value="@status">@status</option> }</select><button class="btn btn-secondary btn-sm" @onclick="ClearFilters">Clear</button></div></div>
+            @if (filteredJobs.Count == 0)
             {
-                <p class="muted">No webhook events match the current filters.</p>
+                <div class="empty-state compact"><p>No sync runs match this filter.</p></div>
             }
             else
             {
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Received</th>
-                            <th>Source</th>
-                            <th>Event type</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var evt in filteredEvents)
-                        {
-                            <tr>
-                                <td>@evt.ReceivedAt.ToLocalTime().ToString("g")</td>
-                                <td>@evt.Source</td>
-                                <td>@evt.EventType</td>
-                                <td>
-                                    @if (evt.ProcessingError is not null)
-                                    {
-                                        <StatusBadge Status="Failed" />
-                                    }
-                                    else if (evt.Processed)
-                                    {
-                                        <StatusBadge Status="Completed" />
-                                    }
-                                    else
-                                    {
-                                        <StatusBadge Status="Queued" />
-                                    }
-                                </td>
-                                <td>
-                                    <button class="btn btn-secondary btn-sm"
-                                            @onclick="() => ViewEvent(evt)">View</button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+                <div class="activity-table" role="table">
+                    @foreach (var job in filteredJobs)
+                    {
+                        <button class="activity-table-row" @onclick="() => selectedJob = job">
+                            <StatusBadge Status="@job.Status.ToString()" />
+                            <span><strong>@job.SourceIntegration?.Name → @job.TargetIntegration?.Name</strong><small>@job.CreatedAt.ToLocalTime().ToString("g")</small></span>
+                            <span class="activity-result">@(job.Status == SyncJobStatus.Failed ? "Needs attention" : FormatDuration(job))</span>
+                            <span aria-hidden="true">›</span>
+                        </button>
+                    }
+                </div>
             }
         </section>
-    </div>
+    }
+    else
+    {
+        <section class="panel diagnostics-panel">
+            <div class="section-header"><div><span class="eyebrow">Advanced</span><h2>Webhook diagnostics</h2><p>Raw inbound events for troubleshooting source-triggered syncs.</p></div></div>
+            <div class="filter-bar activity-filters"><input class="form-control form-control-sm" type="search" placeholder="Search source or event…" @bind="eventSearch" @bind:after="ApplyFilters" /><select class="form-control form-control-sm" @bind="eventStatusFilter" @bind:after="ApplyFilters"><option value="">All statuses</option><option value="pending">Pending</option><option value="processed">Processed</option><option value="error">Errors</option></select><button class="btn btn-secondary btn-sm" @onclick="ClearFilters">Clear</button></div>
+            @if (filteredEvents.Count == 0)
+            {
+                <div class="empty-state compact"><p>No webhook events match this filter.</p></div>
+            }
+            else
+            {
+                <div class="activity-table">
+                    @foreach (var evt in filteredEvents)
+                    {
+                        <button class="activity-table-row" @onclick="() => selectedEvent = evt"><StatusBadge Status="@EventStatus(evt)" /><span><strong>@evt.Source · @evt.EventType</strong><small>@evt.ReceivedAt.ToLocalTime().ToString("g")</small></span><span class="activity-result">@EventStatus(evt)</span><span aria-hidden="true">›</span></button>
+                    }
+                </div>
+            }
+        </section>
+    }
 </LoadingSpinner>
 
-@* Event detail panel *@
+@if (selectedJob is not null)
+{
+    <div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal"><div class="modal-heading"><div><span class="eyebrow">Sync run</span><h2>@selectedJob.SourceIntegration?.Name → @selectedJob.TargetIntegration?.Name</h2></div><button class="icon-button" @onclick="() => selectedJob = null">×</button></div><dl class="detail-grid"><dt>Status</dt><dd><StatusBadge Status="@selectedJob.Status.ToString()" /></dd><dt>Started</dt><dd>@selectedJob.CreatedAt.ToLocalTime().ToString("g")</dd><dt>Duration</dt><dd>@FormatDuration(selectedJob)</dd><dt>Retries</dt><dd>@selectedJob.RetryCount</dd>@if (!string.IsNullOrWhiteSpace(selectedJob.ErrorMessage)) { <dt>Error</dt><dd class="text-danger">@selectedJob.ErrorMessage</dd> }</dl>@if (!string.IsNullOrWhiteSpace(selectedJob.Payload)) { <details class="technical-details"><summary>Technical payload</summary><pre class="code-block">@selectedJob.Payload</pre></details> }</div></div>
+}
 @if (selectedEvent is not null)
 {
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="event-title">
-        <div class="modal">
-            <h2 id="event-title">Webhook event details</h2>
-            <dl class="detail-grid">
-                <dt>ID</dt>
-                <dd><code>@selectedEvent.Id</code></dd>
-                <dt>Source</dt>
-                <dd>@selectedEvent.Source</dd>
-                <dt>Event type</dt>
-                <dd>@selectedEvent.EventType</dd>
-                <dt>Received</dt>
-                <dd>@selectedEvent.ReceivedAt.ToLocalTime().ToString("u")</dd>
-                <dt>Processed</dt>
-                <dd>@(selectedEvent.Processed ? (selectedEvent.ProcessedAt?.ToLocalTime().ToString("u") ?? "Yes") : "No")</dd>
-                @if (selectedEvent.ProcessingError is not null)
-                {
-                    <dt>Error</dt>
-                    <dd class="text-danger">@selectedEvent.ProcessingError</dd>
-                }
-                <dt>Payload</dt>
-                <dd><pre class="code-block">@selectedEvent.Payload</pre></dd>
-            </dl>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" @onclick="CloseEvent">Close</button>
-            </div>
-        </div>
-    </div>
+    <div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal"><div class="modal-heading"><div><span class="eyebrow">Webhook diagnostic</span><h2>@selectedEvent.Source · @selectedEvent.EventType</h2></div><button class="icon-button" @onclick="() => selectedEvent = null">×</button></div><dl class="detail-grid"><dt>Status</dt><dd><StatusBadge Status="@EventStatus(selectedEvent)" /></dd><dt>Received</dt><dd>@selectedEvent.ReceivedAt.ToLocalTime().ToString("g")</dd><dt>Processed</dt><dd>@(selectedEvent.ProcessedAt?.ToLocalTime().ToString("g") ?? "Not yet")</dd>@if (!string.IsNullOrWhiteSpace(selectedEvent.ProcessingError)) { <dt>Error</dt><dd class="text-danger">@selectedEvent.ProcessingError</dd> }</dl><details class="technical-details"><summary>Raw webhook payload</summary><pre class="code-block">@selectedEvent.Payload</pre></details></div></div>
 }
 
 @code {
     private bool isLoading = true;
-    private string searchText = "";
-    private string statusFilter = "";
-    private DateOnly? dateFilter;
-
+    private string activeView = "sync";
+    private string jobStatusFilter = string.Empty;
+    private string eventStatusFilter = string.Empty;
+    private string eventSearch = string.Empty;
+    private IReadOnlyList<SyncJob> allJobs = Array.Empty<SyncJob>();
+    private IReadOnlyList<SyncJob> filteredJobs = Array.Empty<SyncJob>();
     private IReadOnlyList<WebhookEvent> allEvents = Array.Empty<WebhookEvent>();
     private IReadOnlyList<WebhookEvent> filteredEvents = Array.Empty<WebhookEvent>();
+    private SyncJob? selectedJob;
     private WebhookEvent? selectedEvent;
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            // Load all unprocessed + recently processed events for the log view
-            allEvents = await WebhookEventRepository.GetUnprocessedAsync();
-            ApplyFilter();
-        }
-        finally
-        {
-            isLoading = false;
-        }
+        try { allJobs = await SyncJobRepository.GetRecentAsync(100); allEvents = await WebhookEventRepository.GetRecentAsync(100); ApplyFilters(); }
+        finally { isLoading = false; }
     }
-
-    private void ApplyFilter()
+    private void ApplyFilters()
     {
-        var query = allEvents.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            var term = searchText.Trim().ToLowerInvariant();
-            query = query.Where(e =>
-                e.Source.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                e.EventType.Contains(term, StringComparison.OrdinalIgnoreCase));
-        }
-
-        query = statusFilter switch
-        {
-            "pending"   => query.Where(e => !e.Processed),
-            "processed" => query.Where(e => e.Processed && e.ProcessingError is null),
-            "error"     => query.Where(e => e.ProcessingError is not null),
-            _           => query
-        };
-
-        if (dateFilter.HasValue)
-        {
-            query = query.Where(e =>
-                DateOnly.FromDateTime(e.ReceivedAt.LocalDateTime) == dateFilter.Value);
-        }
-
-        filteredEvents = query.OrderByDescending(e => e.ReceivedAt).ToList();
+        filteredJobs = string.IsNullOrWhiteSpace(jobStatusFilter) || !Enum.TryParse<SyncJobStatus>(jobStatusFilter, out var status) ? allJobs : allJobs.Where(x => x.Status == status).ToList();
+        var events = allEvents.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(eventSearch)) events = events.Where(x => x.Source.Contains(eventSearch, StringComparison.OrdinalIgnoreCase) || x.EventType.Contains(eventSearch, StringComparison.OrdinalIgnoreCase));
+        events = eventStatusFilter switch { "pending" => events.Where(x => !x.Processed), "processed" => events.Where(x => x.Processed && x.ProcessingError is null), "error" => events.Where(x => x.ProcessingError is not null), _ => events };
+        filteredEvents = events.ToList();
     }
-
-    private void ClearFilters()
+    private void ClearFilters() { jobStatusFilter = string.Empty; eventStatusFilter = string.Empty; eventSearch = string.Empty; ApplyFilters(); }
+    private static string EventStatus(WebhookEvent evt) => evt.ProcessingError is not null ? "Failed" : evt.Processed ? "Completed" : "Queued";
+    private static string FormatDuration(SyncJob job)
     {
-        searchText = "";
-        statusFilter = "";
-        dateFilter = null;
-        ApplyFilter();
+        if (job.StartedAt is null) return job.Status == SyncJobStatus.Queued ? "Waiting" : "—";
+        var end = job.CompletedAt ?? DateTimeOffset.UtcNow; var duration = end - job.StartedAt.Value;
+        return duration.TotalSeconds < 60 ? $"{duration.TotalSeconds:F1}s" : $"{duration.TotalMinutes:F1}m";
     }
-
-    private void ViewEvent(WebhookEvent evt) => selectedEvent = evt;
-    private void CloseEvent() => selectedEvent = null;
 }
