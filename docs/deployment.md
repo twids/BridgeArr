@@ -18,10 +18,11 @@ Services started:
 - `bridgearr` on the host port configured by `BRIDGEARR_PORT` (`8080` by default)
 - `postgres` on the internal Docker network
 
-Reverse-proxy configuration is intentionally kept outside this Compose file.
-Configure the proxy in the deployment platform and route it to BridgeArr's
-published host port, or use a deployment-owned Compose override to attach the
-`bridgearr` service to the proxy network and route to container port `8080`.
+BridgeArr joins the external Docker network configured by `TRAEFIK_NETWORK`
+(`traefik` by default), while PostgreSQL remains on the private Compose network.
+Configure Traefik (or Pangolin when it owns Traefik's dynamic configuration) to
+route the public hostname to `http://bridgearr:8080`. The published host port is
+kept for direct LAN access.
 
 Database migrations and default admin account seeding run automatically on startup.
 
@@ -44,6 +45,7 @@ Configure `.env` (see `.env.example`) before first startup.
 | `ASPNETCORE_ENVIRONMENT` | | Runtime environment (`Production` by default) |
 | `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
 | `BRIDGEARR_VERSION` | | GHCR image tag (`stable` by default) |
+| `TRAEFIK_NETWORK` | | Existing external reverse-proxy network (`traefik` by default) |
 | `PLEX_URL` | | Plex Media Server base URL |
 | `PLEX_TOKEN` | | Plex authentication token |
 | `RADARR_URL` | | Radarr base URL |

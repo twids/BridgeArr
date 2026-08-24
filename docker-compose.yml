@@ -28,6 +28,9 @@ services:
     depends_on:
       postgres:
         condition: service_started
+    networks:
+      - default
+      - traefik
     restart: unless-stopped
 
   postgres:
@@ -49,3 +52,8 @@ volumes:
   postgres_data:
   bridgearr_logs:
   bridgearr_keys:
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
