@@ -6,6 +6,7 @@ using BridgeArr.Infrastructure.Seed;
 using BridgeArr.Plugins.Plex;
 using BridgeArr.Plugins.Radarr;
 using BridgeArr.Plugins.Sonarr;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -38,6 +39,23 @@ try
         .AddInteractiveServerComponents();
     builder.Services.AddCascadingAuthenticationState();
 
+    var trustedProxyNetworks = builder.Configuration["BRIDGEARR_TRUSTED_PROXY_NETWORKS"];
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = 1;
+
+        foreach (var cidr in (trustedProxyNetworks ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!System.Net.IPNetwork.TryParse(cidr, out var network))
+            {
+                throw new InvalidOperationException($"Invalid trusted proxy network '{cidr}'. Expected CIDR notation.");
+            }
+
+            options.KnownIPNetworks.Add(network);
+        }
+    });
     builder.Services.AddRadarrPlugin();
     builder.Services.AddSonarrPlugin();
     builder.Services.AddPlexPlugin();
@@ -82,6 +100,7 @@ try
         app.MapOpenApi();
     }
 
+    app.UseForwardedHeaders();
     app.UseSerilogRequestLogging();
     app.UseStaticFiles();
     app.UseAuthentication();
