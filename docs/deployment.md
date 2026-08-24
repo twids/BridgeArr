@@ -46,6 +46,7 @@ Configure `.env` (see `.env.example`) before first startup.
 | `BRIDGEARR_PORT` | | Published host port (`8080` by default) |
 | `BRIDGEARR_VERSION` | | GHCR image tag (`stable` by default) |
 | `TRAEFIK_NETWORK` | | Existing external reverse-proxy network (`traefik` by default) |
+| `BRIDGEARR_TRUSTED_PROXY_NETWORKS` | | Comma-separated proxy-network CIDRs allowed to supply forwarded headers |
 | `PLEX_URL` | | Plex Media Server base URL |
 | `PLEX_TOKEN` | | Plex authentication token |
 | `RADARR_URL` | | Radarr base URL |
