@@ -2,103 +2,73 @@
 @attribute [Authorize]
 @inject BridgeArr.Application.Interfaces.IIntegrationRepository IntegrationRepository
 @inject BridgeArr.Application.Interfaces.ISyncJobRepository SyncJobRepository
+@inject BridgeArr.Application.Interfaces.ISyncRouteRepository SyncRouteRepository
 
-<PageTitle>Dashboard – BridgeArr</PageTitle>
+<PageTitle>Overview – BridgeArr</PageTitle>
 
-<h1>Dashboard</h1>
+<header class="page-header">
+    <div>
+        <span class="eyebrow">BridgeArr control room</span>
+        <h1>Everything flowing?</h1>
+        <p>See the health of your connections and label routes at a glance.</p>
+    </div>
+    <a href="/sync" class="btn btn-primary">Manage routes <span aria-hidden="true">→</span></a>
+</header>
 
-<LoadingSpinner IsLoading="@isLoading" Text="Loading dashboard…">
-    <div class="card-grid">
-        <section class="content-card">
-            <h2>Overview</h2>
-            <dl class="stats-grid">
-                <div>
-                    <dt>Configured integrations</dt>
-                    <dd>@integrations.Count</dd>
-                </div>
-                <div>
-                    <dt>Recent sync jobs</dt>
-                    <dd>@recentJobs.Count</dd>
-                </div>
-                <div>
-                    <dt>Failed jobs</dt>
-                    <dd class="@(failedCount > 0 ? "text-danger" : "")">@failedCount</dd>
-                </div>
-                <div>
-                    <dt>Queued jobs</dt>
-                    <dd>@queuedCount</dd>
-                </div>
-            </dl>
-        </section>
+<LoadingSpinner IsLoading="@isLoading" Text="Checking your bridges…">
+    <section class="health-strip @HealthClass">
+        <span class="health-orb"></span>
+        <div>
+            <strong>@HealthTitle</strong>
+            <span>@HealthDescription</span>
+        </div>
+        <a href="/activity">View activity</a>
+    </section>
 
-        <section class="content-card">
-            <h2>Connected integrations</h2>
-            @if (integrations.Count == 0)
+    <div class="metric-grid">
+        <article class="metric-card"><span class="metric-label">Active routes</span><strong>@routes.Count(x => x.Enabled)</strong><small>@routes.Count total configured</small></article>
+        <article class="metric-card"><span class="metric-label">Connections</span><strong>@integrations.Count(x => x.Enabled)</strong><small>@integrations.Count total configured</small></article>
+        <article class="metric-card"><span class="metric-label">Last 20 runs</span><strong>@recentJobs.Count(x => x.Status == SyncJobStatus.Completed)</strong><small>completed successfully</small></article>
+        <article class="metric-card @(failedCount > 0 ? "metric-alert" : "")"><span class="metric-label">Needs attention</span><strong>@failedCount</strong><small>failed runs</small></article>
+    </div>
+
+    <div class="dashboard-grid">
+        <section class="panel panel-span-2">
+            <div class="section-header"><div><span class="eyebrow">Automation</span><h2>Your routes</h2></div><a href="/sync" class="text-button">View all</a></div>
+            @if (routes.Count == 0)
             {
-                <p class="muted">No integrations have been configured yet.</p>
-                <a href="/integrations" class="btn btn-secondary btn-sm">Add integration</a>
+                <div class="empty-state"><span>⇄</span><h3>No routes yet</h3><p>Connect a source to Plex and start moving labels.</p><a href="/sync" class="btn btn-primary btn-sm">Create route</a></div>
             }
             else
             {
-                <ul class="list-reset">
-                    @foreach (var integration in integrations)
+                <div class="route-list">
+                    @foreach (var route in routes.Take(4))
                     {
-                        <li class="list-item-row">
-                            <div>
-                                <strong>@integration.Name</strong>
-                                <span class="muted"> (@integration.PluginType)</span>
-                            </div>
-                            <StatusBadge Status="@(integration.Enabled ? "Enabled" : "Disabled")" />
-                        </li>
+                        <a class="route-row" href="/sync">
+                            <div class="route-connector"><span>@Initial(route.SourceIntegration?.Name)</span><i></i><span>@Initial(route.TargetIntegration?.Name)</span></div>
+                            <div class="route-copy"><strong>@route.Name</strong><small>@route.SourceIntegration?.Name → @route.TargetIntegration?.Name</small></div>
+                            <div class="route-schedule"><StatusBadge Status="@(route.Enabled ? "Enabled" : "Disabled")" /><small>@LastRun(route)</small></div>
+                        </a>
                     }
-                </ul>
+                </div>
             }
         </section>
 
-        <section class="content-card">
-            <h2>Recent sync jobs</h2>
+        <section class="panel">
+            <div class="section-header"><div><span class="eyebrow">Recent</span><h2>Activity</h2></div></div>
             @if (recentJobs.Count == 0)
             {
-                <p class="muted">No sync jobs recorded yet.</p>
+                <div class="empty-state compact"><p>No sync runs recorded yet.</p></div>
             }
             else
             {
-                <ul class="list-reset">
-                    @foreach (var job in recentJobs.Take(5))
+                <div class="activity-list">
+                    @foreach (var job in recentJobs.Take(6))
                     {
-                        <li class="list-item-row">
-                            <div>
-                                <span class="muted">@job.SourceIntegration?.Name → @job.TargetIntegration?.Name</span>
-                                <br />
-                                <small class="muted">@job.CreatedAt.ToLocalTime().ToString("g")</small>
-                            </div>
-                            <StatusBadge Status="@job.Status.ToString()" />
-                        </li>
+                        <a class="activity-row" href="/activity"><StatusBadge Status="@job.Status.ToString()" /><span><strong>@job.SourceIntegration?.Name → @job.TargetIntegration?.Name</strong><small>@RelativeTime(job.CreatedAt)</small></span></a>
                     }
-                </ul>
-                @if (recentJobs.Count > 5)
-                {
-                    <a href="/sync" class="btn btn-secondary btn-sm" style="margin-top:0.75rem">View all</a>
-                }
+                </div>
             }
-        </section>
-
-        <section class="content-card">
-            <h2>Queue status</h2>
-            <dl class="stats-grid">
-                <div>
-                    <dt>Running</dt>
-                    <dd>@runningCount</dd>
-                </div>
-                <div>
-                    <dt>Queued</dt>
-                    <dd>@queuedCount</dd>
-                </div>
-                <div>
-                    <dt>Completed (recent)</dt>
-                    <dd>@completedCount</dd>
-                </div>
-            </dl>
         </section>
     </div>
 </LoadingSpinner>
@@ -107,11 +77,11 @@
     private bool isLoading = true;
     private IReadOnlyList<Integration> integrations = Array.Empty<Integration>();
     private IReadOnlyList<SyncJob> recentJobs = Array.Empty<SyncJob>();
-
+    private IReadOnlyList<SyncRoute> routes = Array.Empty<SyncRoute>();
     private int failedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Failed);
-    private int queuedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Queued);
-    private int runningCount => recentJobs.Count(j => j.Status == SyncJobStatus.Running);
-    private int completedCount => recentJobs.Count(j => j.Status == SyncJobStatus.Completed);
+    private string HealthClass => failedCount > 0 ? "health-warning" : routes.Count == 0 ? "health-neutral" : "health-good";
+    private string HealthTitle => failedCount > 0 ? "Some runs need attention" : routes.Count == 0 ? "Ready when you are" : "All systems look good";
+    private string HealthDescription => failedCount > 0 ? $"{failedCount} of the latest runs failed." : routes.Count == 0 ? "Create your first route to start syncing." : "Your enabled routes are being scheduled normally.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,10 +89,19 @@
         {
             integrations = await IntegrationRepository.GetAllAsync();
             recentJobs = await SyncJobRepository.GetRecentAsync(20);
+            routes = await SyncRouteRepository.GetAllAsync();
         }
-        finally
-        {
-            isLoading = false;
-        }
+        finally { isLoading = false; }
+    }
+
+    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name[..1].ToUpperInvariant();
+    private static string LastRun(SyncRoute route) => route.LastQueuedAt is null ? "Never run" : $"Last run {RelativeTime(route.LastQueuedAt.Value)}";
+    private static string RelativeTime(DateTimeOffset value)
+    {
+        var elapsed = DateTimeOffset.UtcNow - value;
+        if (elapsed.TotalMinutes < 1) return "just now";
+        if (elapsed.TotalHours < 1) return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalDays < 1) return $"{(int)elapsed.TotalHours}h ago";
+        return $"{(int)elapsed.TotalDays}d ago";
     }
 }

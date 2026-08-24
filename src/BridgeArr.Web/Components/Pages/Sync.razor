@@ -5,42 +5,37 @@
 @inject BridgeArr.Application.Services.SyncRouteService SyncRouteService
 @inject BridgeArr.Application.Services.IntegrationService IntegrationService
 
-<PageTitle>Sync – BridgeArr</PageTitle>
+<PageTitle>Routes – BridgeArr</PageTitle>
 
-<h1>Synchronization</h1>
+<header class="page-header">
+    <div><span class="eyebrow">Label automation</span><h1>Routes</h1><p>Choose where labels come from, where they go and how often BridgeArr checks for changes.</p></div>
+    <button class="btn btn-primary" @onclick="OpenRouteForm">Create route <span aria-hidden="true">+</span></button>
+</header>
 
 <AlertBanner Message="@alertMessage" IsError="@alertIsError" OnDismiss="@(() => alertMessage = null)" />
-<section class="content-card">
-    <div class="section-header">
-        <h2>Sync routes</h2>
-        <button class="btn btn-primary btn-sm" @onclick="OpenRouteForm">Add route</button>
-    </div>
+
+<section class="route-section">
     @if (routes.Count == 0)
     {
-        <p class="muted">No scheduled synchronization routes configured.</p>
+        <div class="panel empty-state hero-empty"><span>⇄</span><h2>No routes configured</h2><p>Create a bridge from Radarr or Sonarr to Plex. Enabled routes run automatically on their schedule.</p><button class="btn btn-primary" @onclick="OpenRouteForm">Create first route</button></div>
     }
     else
     {
-        <table class="table">
-            <thead><tr><th>Name</th><th>Source</th><th>Target</th><th>Interval</th><th>Last queued</th><th>Actions</th></tr></thead>
-            <tbody>
+        <div class="route-card-grid">
             @foreach (var route in routes)
             {
-                <tr>
-                    <td>@route.Name</td>
-                    <td>@route.SourceIntegration?.Name</td>
-                    <td>@route.TargetIntegration?.Name</td>
-                    <td>@route.IntervalMinutes min</td>
-                    <td>@(route.LastQueuedAt?.ToLocalTime().ToString("g") ?? "Never")</td>
-                    <td class="action-cell">
-                        <button class="btn btn-primary btn-sm" @onclick="() => RunRoute(route)" disabled="@isBusy">Run now</button>
-                        <button class="btn btn-secondary btn-sm" @onclick="() => EditRoute(route)">Edit</button>
-                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteRoute(route.Id)">Delete</button>
-                    </td>
-                </tr>
+                <article class="route-card @(route.Enabled ? "" : "route-disabled")">
+                    <div class="route-card-heading"><div><span class="eyebrow">Scheduled every @route.IntervalMinutes min</span><h2>@route.Name</h2></div><StatusBadge Status="@(route.Enabled ? "Enabled" : "Disabled")" /></div>
+                    <div class="route-flow">
+                        <div><span class="service-mark service-@route.SourceIntegration?.PluginType">@ServiceInitial(route.SourceIntegration?.Name)</span><strong>@route.SourceIntegration?.Name</strong><small>Source</small></div>
+                        <span class="flow-line"><i></i><b>→</b></span>
+                        <div><span class="service-mark service-@route.TargetIntegration?.PluginType">@ServiceInitial(route.TargetIntegration?.Name)</span><strong>@route.TargetIntegration?.Name</strong><small>Target</small></div>
+                    </div>
+                    <div class="route-meta"><span><small>Last queued</small><strong>@(route.LastQueuedAt?.ToLocalTime().ToString("g") ?? "Never")</strong></span><span><small>Schedule</small><strong>@(route.Enabled ? $"Every {route.IntervalMinutes} minutes" : "Paused")</strong></span></div>
+                    <div class="connection-actions"><button class="btn btn-primary btn-sm" @onclick="() => RunRoute(route)" disabled="@isBusy">Run now</button><button class="text-button" @onclick="() => EditRoute(route)">Edit</button><button class="text-button text-danger" @onclick="() => ConfirmDeleteRoute(route)">Delete</button></div>
+                </article>
             }
-            </tbody>
-        </table>
+        </div>
     }
 </section>
 
@@ -48,134 +43,44 @@
 {
     <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="route-title">
         <div class="modal">
-            <h2 id="route-title">@(routeForm.Id == Guid.Empty ? "Add sync route" : "Edit sync route")</h2>
+            <div class="modal-heading"><div><span class="eyebrow">Automation route</span><h2 id="route-title">@(routeForm.Id == Guid.Empty ? "Create route" : "Edit route")</h2></div><button class="icon-button" @onclick="CloseRouteForm" type="button">×</button></div>
             <EditForm Model="routeForm" OnValidSubmit="SaveRoute" FormName="SyncRouteForm">
                 <DataAnnotationsValidator />
-                <div class="form-group"><label>Name</label><InputText class="form-control" @bind-Value="routeForm.Name" /></div>
-                <div class="form-group"><label>Source</label><InputSelect class="form-control" @bind-Value="routeForm.SourceIntegrationId">
-                    <option value="@Guid.Empty">Select source</option>
-                    @foreach (var item in sourceIntegrations) { <option value="@item.Id">@item.Name</option> }
-                </InputSelect></div>
-                <div class="form-group"><label>Target</label><InputSelect class="form-control" @bind-Value="routeForm.TargetIntegrationId">
-                    <option value="@Guid.Empty">Select target</option>
-                    @foreach (var item in targetIntegrations) { <option value="@item.Id">@item.Name</option> }
-                </InputSelect></div>
-                <div class="form-group"><label>Interval (minutes)</label><InputNumber class="form-control" @bind-Value="routeForm.IntervalMinutes" /></div>
-                <div class="form-group"><label class="checkbox-label"><InputCheckbox @bind-Value="routeForm.Enabled" /> Enabled</label></div>
-                <div class="modal-actions"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-secondary" type="button" @onclick="CloseRouteForm">Cancel</button></div>
+                <div class="form-group"><label>Route name</label><InputText class="form-control" @bind-Value="routeForm.Name" placeholder="Movies to Plex" /></div>
+                <div class="form-group"><label>Source</label><InputSelect class="form-control" @bind-Value="routeForm.SourceIntegrationId"><option value="@Guid.Empty">Select a source</option>@foreach (var item in sourceIntegrations) { <option value="@item.Id">@item.Name · @item.PluginType</option> }</InputSelect></div>
+                <div class="form-group"><label>Target</label><InputSelect class="form-control" @bind-Value="routeForm.TargetIntegrationId"><option value="@Guid.Empty">Select a target</option>@foreach (var item in targetIntegrations) { <option value="@item.Id">@item.Name · @item.PluginType</option> }</InputSelect></div>
+                <div class="form-group"><label>Check interval</label><div class="input-with-suffix"><InputNumber class="form-control" @bind-Value="routeForm.IntervalMinutes" /><span>minutes</span></div><small>BridgeArr queues a sync when this interval has elapsed.</small></div>
+                <label class="switch-row"><span><strong>Route enabled</strong><small>Paused routes can still be run manually.</small></span><InputCheckbox @bind-Value="routeForm.Enabled" /></label>
+                <div class="modal-actions"><button class="btn btn-primary" type="submit">Save route</button><button class="btn btn-secondary" type="button" @onclick="CloseRouteForm">Cancel</button></div>
             </EditForm>
         </div>
     </div>
 }
 
-<LoadingSpinner IsLoading="@isLoading" Text="Loading sync jobs…">
-    <section class="content-card">
-        <div class="section-header">
-            <h2>Sync jobs</h2>
-            <div class="filter-bar">
-                <select class="form-control form-control-sm" @bind="statusFilter" @bind:after="ApplyFilter">
-                    <option value="">All statuses</option>
-                    @foreach (var status in Enum.GetValues<SyncJobStatus>())
-                    {
-                        <option value="@status">@status</option>
-                    }
-                </select>
-            </div>
-        </div>
+<ConfirmDialog IsVisible="@showRouteDeleteConfirm" Title="Delete route" Message="@routeDeleteMessage" ConfirmLabel="Delete" OnConfirm="ExecuteDeleteRoute" OnCancel="@(() => showRouteDeleteConfirm = false)" />
 
+<LoadingSpinner IsLoading="@isLoading" Text="Loading recent runs…">
+    <section class="panel activity-preview">
+        <div class="section-header"><div><span class="eyebrow">Latest runs</span><h2>Recent activity</h2></div><a href="/activity" class="text-button">Open full history</a></div>
         @if (filteredJobs.Count == 0)
         {
-            <p class="muted">No synchronization jobs @(statusFilter != "" ? $"with status \"{statusFilter}\"" : "have been recorded") yet.</p>
+            <div class="empty-state compact"><p>No sync runs have been recorded yet.</p></div>
         }
         else
         {
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Status</th>
-                        <th>Source</th>
-                        <th>Target</th>
-                        <th>Created</th>
-                        <th>Duration</th>
-                        <th>Retries</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var job in filteredJobs)
-                    {
-                        <tr>
-                            <td><StatusBadge Status="@job.Status.ToString()" /></td>
-                            <td>@(job.SourceIntegration?.Name ?? job.SourceIntegrationId.ToString()[..8])</td>
-                            <td>@(job.TargetIntegration?.Name ?? job.TargetIntegrationId.ToString()[..8])</td>
-                            <td>@job.CreatedAt.ToLocalTime().ToString("g")</td>
-                            <td>@FormatDuration(job)</td>
-                            <td>@job.RetryCount</td>
-                            <td class="action-cell">
-                                <button class="btn btn-secondary btn-sm"
-                                        @onclick="() => ViewDetails(job)">Details</button>
-                                @if (job.Status == SyncJobStatus.Failed)
-                                {
-                                    <button class="btn btn-primary btn-sm"
-                                            @onclick="() => RetryJob(job)"
-                                            disabled="@isBusy">Retry</button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="activity-table">
+                @foreach (var job in filteredJobs.Take(8))
+                {
+                    <button class="activity-table-row" @onclick="() => ViewDetails(job)"><StatusBadge Status="@job.Status.ToString()" /><span><strong>@(job.SourceIntegration?.Name ?? "Source") → @(job.TargetIntegration?.Name ?? "Target")</strong><small>@job.CreatedAt.ToLocalTime().ToString("g")</small></span><span class="activity-result">@FormatDuration(job)</span><span aria-hidden="true">›</span></button>
+                }
+            </div>
         }
     </section>
 </LoadingSpinner>
 
-@* Job details panel *@
 @if (selectedJob is not null)
 {
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="details-title">
-        <div class="modal">
-            <h2 id="details-title">Sync job details</h2>
-            <dl class="detail-grid">
-                <dt>ID</dt>
-                <dd><code>@selectedJob.Id</code></dd>
-                <dt>Status</dt>
-                <dd><StatusBadge Status="@selectedJob.Status.ToString()" /></dd>
-                <dt>Source</dt>
-                <dd>@(selectedJob.SourceIntegration?.Name ?? selectedJob.SourceIntegrationId.ToString())</dd>
-                <dt>Target</dt>
-                <dd>@(selectedJob.TargetIntegration?.Name ?? selectedJob.TargetIntegrationId.ToString())</dd>
-                <dt>Created</dt>
-                <dd>@selectedJob.CreatedAt.ToLocalTime().ToString("u")</dd>
-                <dt>Started</dt>
-                <dd>@(selectedJob.StartedAt?.ToLocalTime().ToString("u") ?? "—")</dd>
-                <dt>Completed</dt>
-                <dd>@(selectedJob.CompletedAt?.ToLocalTime().ToString("u") ?? "—")</dd>
-                <dt>Duration</dt>
-                <dd>@FormatDuration(selectedJob)</dd>
-                <dt>Retry count</dt>
-                <dd>@selectedJob.RetryCount</dd>
-                @if (selectedJob.ErrorMessage is not null)
-                {
-                    <dt>Error</dt>
-                    <dd class="text-danger">@selectedJob.ErrorMessage</dd>
-                }
-                @if (selectedJob.Payload is not null)
-                {
-                    <dt>Payload</dt>
-                    <dd><pre class="code-block">@selectedJob.Payload</pre></dd>
-                }
-            </dl>
-            <div class="modal-actions">
-                @if (selectedJob.Status == SyncJobStatus.Failed)
-                {
-                    <button class="btn btn-primary" @onclick="() => RetryJob(selectedJob)" disabled="@isBusy">
-                        Retry job
-                    </button>
-                }
-                <button class="btn btn-secondary" @onclick="CloseDetails">Close</button>
-            </div>
-        </div>
-    </div>
+    <div class="modal-backdrop" role="dialog" aria-modal="true"><div class="modal"><div class="modal-heading"><div><span class="eyebrow">Sync run</span><h2>@selectedJob.SourceIntegration?.Name → @selectedJob.TargetIntegration?.Name</h2></div><button class="icon-button" @onclick="CloseDetails">×</button></div><dl class="detail-grid"><dt>Status</dt><dd><StatusBadge Status="@selectedJob.Status.ToString()" /></dd><dt>Created</dt><dd>@selectedJob.CreatedAt.ToLocalTime().ToString("g")</dd><dt>Duration</dt><dd>@FormatDuration(selectedJob)</dd><dt>Retries</dt><dd>@selectedJob.RetryCount</dd>@if (selectedJob.ErrorMessage is not null) { <dt>Error</dt><dd class="text-danger">@selectedJob.ErrorMessage</dd> }</dl>@if (selectedJob.Payload is not null) { <details class="technical-details"><summary>Technical payload</summary><pre class="code-block">@selectedJob.Payload</pre></details> }@if (selectedJob.Status == SyncJobStatus.Failed) { <div class="modal-actions"><button class="btn btn-primary" @onclick="() => RetryJob(selectedJob)" disabled="@isBusy">Retry run</button></div> }</div></div>
 }
 @code {
     private bool isLoading = true;
@@ -192,6 +97,9 @@
     private IReadOnlyList<Integration> targetIntegrations = Array.Empty<Integration>();
     private SyncRoute routeForm = new();
     private bool showRouteForm;
+    private bool showRouteDeleteConfirm;
+    private Guid routeDeleteTargetId;
+    private string routeDeleteMessage = string.Empty;
 
     private async Task LoadRoutes()
     {
@@ -220,6 +128,9 @@
 
     private async Task SaveRoute()
     {
+        if (string.IsNullOrWhiteSpace(routeForm.Name)) { ShowError("Route name is required."); return; }
+        if (routeForm.SourceIntegrationId == Guid.Empty || routeForm.TargetIntegrationId == Guid.Empty) { ShowError("Select both a source and a target."); return; }
+        routeForm.Name = routeForm.Name.Trim();
         try
         {
             if (routeForm.Id == Guid.Empty) await SyncRouteService.CreateAsync(routeForm);
@@ -238,7 +149,6 @@
         {
             var job = await SyncRouteService.QueueAsync(route);
             await LoadRoutes();
-            await LoadRoutes();
             await LoadJobs();
             if (job is null) ShowError("A matching sync job is already active.");
             else ShowSuccess($"Sync queued as job {job.Id}.");
@@ -247,11 +157,23 @@
         finally { isBusy = false; }
     }
 
-    private async Task DeleteRoute(Guid id)
+    private void ConfirmDeleteRoute(SyncRoute route)
     {
-        await SyncRouteService.DeleteAsync(id);
-        await LoadRoutes();
-        ShowSuccess("Sync route deleted.");
+        routeDeleteTargetId = route.Id;
+        routeDeleteMessage = $"Delete {route.Name}? Its previous sync activity will remain available.";
+        showRouteDeleteConfirm = true;
+    }
+
+    private async Task ExecuteDeleteRoute()
+    {
+        showRouteDeleteConfirm = false;
+        try
+        {
+            await SyncRouteService.DeleteAsync(routeDeleteTargetId);
+            await LoadRoutes();
+            ShowSuccess("Route deleted.");
+        }
+        catch (Exception ex) { ShowError($"Could not delete route: {ex.Message}"); }
     }
 
     protected override async Task OnInitializedAsync()
@@ -312,6 +234,7 @@
     private void ViewDetails(SyncJob job) => selectedJob = job;
     private void CloseDetails() => selectedJob = null;
 
+    private static string ServiceInitial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name[..1].ToUpperInvariant();
     private static string FormatDuration(SyncJob job)
     {
         if (job.StartedAt is null || job.CompletedAt is null)
@@ -327,4 +250,3 @@
     private void ShowSuccess(string message) { alertMessage = message; alertIsError = false; }
     private void ShowError(string message) { alertMessage = message; alertIsError = true; }
 }
-

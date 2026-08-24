@@ -30,4 +30,10 @@ public class WebhookEventRepository : IWebhookEventRepository
             .Where(e => !e.Processed)
             .OrderBy(e => e.ReceivedAt)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WebhookEvent>> GetRecentAsync(int count = 100, CancellationToken cancellationToken = default)
+        => await _db.WebhookEvents
+            .OrderByDescending(e => e.ReceivedAt)
+            .Take(count)
+            .ToListAsync(cancellationToken);
 }

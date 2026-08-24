@@ -8,4 +8,5 @@ public interface IWebhookEventRepository
     Task<WebhookEvent> AddAsync(WebhookEvent webhookEvent, CancellationToken cancellationToken = default);
     Task<WebhookEvent> UpdateAsync(WebhookEvent webhookEvent, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<WebhookEvent>> GetUnprocessedAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<WebhookEvent>> GetRecentAsync(int count = 100, CancellationToken cancellationToken = default);
 }

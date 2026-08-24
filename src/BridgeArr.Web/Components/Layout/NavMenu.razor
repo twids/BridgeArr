@@ -1,22 +1,24 @@
 <nav class="sidebar">
-    <div>
-        <div class="brand">BridgeArr</div>
-        <div class="tagline">Modular media automation</div>
-    </div>
+    <a class="brand-lockup" href="/">
+        <span class="brand-mark">B</span>
+        <span><strong>BridgeArr</strong><small>Media labels, connected</small></span>
+    </a>
 
-    <div class="nav-links">
-        <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink href="/integrations">Integrations</NavLink>
-        <NavLink href="/sync">Sync</NavLink>
-        <NavLink href="/logs">Logs</NavLink>
-        <NavLink href="/settings">Settings</NavLink>
+    <div class="nav-links" aria-label="Primary navigation">
+        <NavLink href="/" Match="NavLinkMatch.All"><span class="nav-icon">⌂</span>Overview</NavLink>
+        <NavLink href="/integrations"><span class="nav-icon">↔</span>Connections</NavLink>
+        <NavLink href="/sync"><span class="nav-icon">⇄</span>Routes</NavLink>
+        <NavLink href="/activity"><span class="nav-icon">◷</span>Activity</NavLink>
     </div>
 
     <AuthorizeView>
         <Authorized>
             <div class="nav-footer">
-                <span class="muted nav-username">@context.User.Identity?.Name</span>
-                <a href="/account/logout" class="btn btn-secondary btn-sm" data-enhance-nav="false">Sign out</a>
+                <div class="user-chip">
+                    <span class="user-avatar">@((context.User.Identity?.Name ?? "U")[0].ToString().ToUpperInvariant())</span>
+                    <span><small>Signed in as</small><strong>@context.User.Identity?.Name</strong></span>
+                </div>
+                <a href="/account/logout" class="text-button" data-enhance-nav="false">Sign out</a>
             </div>
         </Authorized>
     </AuthorizeView>

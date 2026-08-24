@@ -29,9 +29,16 @@ public class IntegrationRepository : IIntegrationRepository
 
     public async Task<Integration> UpdateAsync(Integration integration, CancellationToken cancellationToken = default)
     {
-        _db.Integrations.Update(integration);
+        var existing = await _db.Integrations.FindAsync([integration.Id], cancellationToken)
+            ?? throw new KeyNotFoundException($"Integration '{integration.Id}' was not found.");
+
+        existing.Name = integration.Name;
+        existing.PluginType = integration.PluginType;
+        existing.Enabled = integration.Enabled;
+        existing.ConfigurationJson = integration.ConfigurationJson;
+        existing.UpdatedAt = integration.UpdatedAt;
         await _db.SaveChangesAsync(cancellationToken);
-        return integration;
+        return existing;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
